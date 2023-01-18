@@ -1,1 +1,12 @@
 *__pycache__
+.ipynb_checkpoints
+.vscode
+Data
+Data_orig
+IDP Askar
+Papers
+*.csv
+*.hdf
+*.pt
+*.zip
+test.py
