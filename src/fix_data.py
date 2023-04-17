@@ -9,7 +9,7 @@ in_dir_path = path.join(argv[1], 'Ampeldaten_20220525_SP')
 out_dir_path = path.join(argv[2], 'Ampeldaten_20220525_SP')
 detectors = listdir(in_dir_path)
 for i, det in enumerate(detectors):
-    if det not in ['3050']:
+    if det not in ['2040', '4170', '8007']:
         print(f'{det} - {i + 1}/{len(detectors)}')
         days_dir_path = path.join(det, 'Detektorzaehlwerte')
         in_det_path = path.join(in_dir_path, days_dir_path)
@@ -46,4 +46,5 @@ for i, det in enumerate(detectors):
             out_day_path = path.join(out_det_path, day)
             read_csv(in_day_path, sep=None, names=header, on_bad_lines='skip', engine='python')\
                 .iloc[1:].set_index('DATUM').to_csv(in_day_path, sep=';')
-
+        d20211031 = path.join(out_det_path, 'DetCount_20211031.csv')
+        read_csv(d20211031, sep=';').drop(index=list(range(8, 12))).to_csv(d20211031, sep=';')

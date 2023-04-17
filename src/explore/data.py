@@ -28,7 +28,8 @@ class DetectorDataProvider:
         file_path = join(self.data_path, int_id, 'Detektorzaehlwerte',
             file_name)
         # TODO Preprocess it in fix_headers.py
-        timestamps = [datetime(year=2021, month=month, day=day) + timedelta(minutes=m) for m in range(0, 24 * 60, 15)]
+        timestamps = [datetime(year=2021, month=month, day=day) + timedelta(minutes=m) \
+                      for m in range(0, 24 * 60, 15)]
         timestamps = pd.DataFrame(timestamps, columns=['DATUM'])
 
         try:
@@ -38,6 +39,10 @@ class DetectorDataProvider:
 
         csv['DATUM'] = pd.to_datetime(csv['DATUM'], errors='coerce')
         csv = csv.merge(timestamps, how='outer', on='DATUM')
+
+        if len(csv) not in self.DELETEME:
+            self.DELETEME.add(len(csv))
+            print(len(csv), file_name)
 
         return csv
     
@@ -57,7 +62,7 @@ class LookUpTable:
             '3050',                 # missing header
             '3060_G',               # confusing - discuss
             '3060_L',               # confusing - discuss
-            '4170',                 # missing folder
+            # '4170',                 # missing folder
             '42',                   # conflicting detector names
             '5090_Teilknoten 1',    # confusing - discuss
             '5090_Teilknoten 2',    # confusing - discuss
@@ -67,7 +72,7 @@ class LookUpTable:
             '6010_F1b',             # -//-
             '6060',                 # conflicting detector names - 13(DA4) vs 13(DD4)
             '7',                    # no traffic detector
-            '8007',                 # missing folder
+            # '8007',                 # missing folder
             'nan',                  # ???
         )
         data_path = join(data_path,

@@ -9,4 +9,4 @@ Papers
 *.hdf
 *.pt
 *.zip
-test.py
+test*
