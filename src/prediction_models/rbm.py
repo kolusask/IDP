@@ -23,6 +23,13 @@ class RBM(nn.Module):
         self.h = nn.Parameter(torch.randn(1, n_hid))
         self.W = nn.Parameter(torch.randn(n_hid, n_vis))
         self.k = k
+    
+    def prop_forward(self, v):
+        return torch.sigmoid(F.linear(v, self.W, self.h))
+    
+    def prop_backward(self, h):
+        return torch.sigmoid(F.linear(h, self.W.t(), self.v))
+
 
     def visible_to_hidden(self, v):
         r"""Conditional sampling a hidden variable given a visible variable.
@@ -31,7 +38,7 @@ class RBM(nn.Module):
         Returns:
             Tensor: The hidden variable.
         """
-        p = torch.sigmoid(F.linear(v, self.W, self.h))
+        p = self.prop_forward(v)
         return p.bernoulli()
 
     def hidden_to_visible(self, h):
@@ -41,7 +48,7 @@ class RBM(nn.Module):
         Returns:
             Tensor: The visible variable.
         """
-        p = torch.sigmoid(F.linear(h, self.W.t(), self.v))
+        p = self.prop_backward(h)
         return p.bernoulli()
 
     def free_energy(self, v):
@@ -68,19 +75,21 @@ class RBM(nn.Module):
         Returns:
             (Tensor, Tensor): The real and generagted variables.
         """
-        h = self.visible_to_hidden(v)
+        h = self.prop_forward(v)
         for _ in range(self.k):
-            v_gibb = self.hidden_to_visible(h)
-            h = self.visible_to_hidden(v_gibb)
-        return v, v_gibb
+            v_gibb = self.prop_backward(h)
+            h = self.prop_forward(v_gibb)
+        return v, v_gibb, h
 
 def train_rbm(model: RBM, train_loader: data.DataLoader, n_epochs: int=20, lr: float=0.01, print_every=10):
     optimizer = torch.optim.Adam(model.parameters(), lr)
+
     model.train(True)
+
     for epoch in range(n_epochs):
         losses = []
         for data in train_loader:
-            v, v_gibbs = model(data)
+            v, v_gibbs, _ = model(data)
             loss = model.free_energy(v) - model.free_energy(v_gibbs)
             optimizer.zero_grad()
             loss.backward()

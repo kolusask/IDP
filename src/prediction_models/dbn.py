@@ -18,52 +18,51 @@ class DBN(nn.Module):
             self.rbms.append(RBM(input_size, os, k))
             input_size = os
     
-    def forward(self, v, layers_to_use : Optional[int] = None):
-        if layers_to_use is None:
-            layers_to_use = len(self.rbms)
+    def forward(self, v):
+        for rbm in self.rbms:
+            v = rbm.prop_forward(v)
         
-        h = v
-        for rbm in self.rbms[:layers_to_use]:
-            _, v_gibbs = rbm(h)
-            h = rbm.visible_to_hidden(v_gibbs)
-        
-        return h
+        return v
 
     
-class PartialDBNDataset(Dataset):
-    def __init__(self, base_dataset: Dataset, model: DBN, layers_to_use: int):
-        super(PartialDBNDataset, self).__init__()
-        self.base_dataset = base_dataset
-        self.model = model
-        self.layers_to_use = layers_to_use
+def train_dbm(model: DBN, train_loader: torch.utils.data.DataLoader,
+              n_epochs: int=20, n_epochs_per_rbm: int=20, dbn_lr: float=0.01, 
+              rbm_lr: float=0.01, print_every=10, pre_train_rbms=True):
     
-    def __len__(self):
-        return len(self.base_dataset)
-    
-    def __getitem__(self, index: int):
-        data, _ = self.base_dataset[index]
-        asdf = 5
-        h = self.model(data, self.layers_to_use)
-        return h
+    if pre_train_rbms:
+        for epoch in range(n_epochs_per_rbm):
+            data = [d for d, _ in train_loader]
+            for m, rbm in enumerate(model.rbms):
+                optimizer = torch.optim.Adam(rbm.parameters(), rbm_lr)
+                next_data = []
+                losses = []
+                for i, sample in enumerate(data):
+                    rbm.train(True)
+                    v, v_gibbs, h = rbm(sample)
+                    loss = rbm.free_energy(v) - rbm.free_energy(v_gibbs)
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+                    rbm.train(False)
+                    next_data.append(h.detach())
+                    losses.append(loss.detach())
+                    if i % print_every == 0:
+                        print(f'Epoch {epoch}, Machine {m}:\tLoss: {mean(losses)}')
+                data = next_data
 
 
-def train_dbm(model: DBN, train_loader: torch.utils.data.DataLoader, n_epochs: int=20, n_epochs_per_rbm: int=20, lr: float=0.01, print_every=10, pre_train_rbms=True):
-    model.train()
-    optimizer = Adam(model.parameters(), lr)
+    optimizer = Adam(model.parameters(), dbn_lr)
     loss_fn = nn.CrossEntropyLoss()
 
-    if pre_train_rbms:
-        for i, rbm in enumerate(model.rbms):
-            partial_loader = DataLoader(PartialDBNDataset(train_loader.dataset, model, i))
-            train_rbm(rbm, partial_loader, n_epochs_per_rbm, lr, print_every)
+    model.train()
 
     for epoch in range(n_epochs):
         print("DBN epoch " + str(epoch))
         dbn_losses = []
-        
+
         for data, target in train_loader:
             pred = model(data)
-            loss = loss_fn(pred, target)
+            loss = loss_fn(pred, data)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
