@@ -2,5 +2,7 @@
     "CONFIG_NAME": "exclude_missing",
     "SPECTRAL_THRESHOLD": 10000,
     "HIDDEN_LAYER_NUMBER": 4,
-    "ALPHA": 0.9999
+    "ALPHA": 0.9999,
+    "DBN_LAYER_SIZES": [10, 9, 8, 7],
+    "GIBBS_SAMPLING_STEPS": 2
 }
