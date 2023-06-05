@@ -9,6 +9,7 @@ with open('config.json') as config:
 
 OUTPUTS_FOLDER = 'outputs/' + CONFIG['CONFIG_NAME']
 
+DATE_FORMAT = '%Y-%m-%d'
 
 if not os.path.exists(OUTPUTS_FOLDER):
     os.makedirs(OUTPUTS_FOLDER)
