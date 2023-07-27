@@ -1,0 +1,14 @@
+name: .idp
+
+channels:
+  - anaconda
+
+dependencies:
+  - ipykernel
+  - matplotlib
+  - openpyxl
+  - pandas
+  - pip
+  - pytables
+  - pip:
+    - torch
