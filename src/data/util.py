@@ -6,7 +6,7 @@ POINTS_PER_HOUR = 60 // 15
 
 
 def count_points_between(start_date: datetime, end_date: datetime):
-    return int((end_date - start_date).total_seconds() // (60 * POINTS_PER_HOUR))
+    return int((end_date - start_date).total_seconds() // 3600 * POINTS_PER_HOUR)
 
 
 def crop_q_between(mat_q, old_start, old_end, new_start, new_end):
