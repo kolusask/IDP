@@ -52,6 +52,13 @@ class DetectorDataProvider:
         for date in (start + timedelta(days=n) for n in range((end - start).days)):
             data.append(self.get_data_for_day(int_id, date.day, date.month))
         return pd.concat(data).set_index('DATUM')
+    
+    def get_counts_entering_section(self, section_end, detectors, start_date, end_date):
+        section_data = self.get_data_for_period(section_end, start_date, end_date)
+        for col in section_data.columns:
+            section_data[col] = pd.to_numeric(section_data[col], errors='coerce')
+
+        return list(section_data[detectors].fillna(0).sum(axis=1, numeric_only=True))
 
 
 class LookUpTable:
@@ -123,3 +130,22 @@ class LookUpTable:
     
     def get_destinations(self):
         return iter(self.lookup_table['Ending Intersection'].unique())
+    
+    def get_sections(self):
+        sections = set()
+        for inter in self.list_intersections():
+            detectors = self.get_detectors_on(inter)
+            for sec in detectors[['Starting Intersection', 'Ending Intersection']].values:
+                sections.add(tuple(sorted(sec)))
+        
+        return sections
+    
+    def get_detectors_per_section(self):
+        int_det = []
+        for int_1, int_2 in self.get_sections():
+            det_1_2, det_2_1 = self.get_detectors_between(int_1, int_2)
+            int_det.append((int_1, int_2, det_1_2))
+            int_det.append((int_2, int_1, det_2_1))
+        int_det = pd.DataFrame(int_det, columns=['Start', 'End', 'Detectors'])
+
+        return int_det
