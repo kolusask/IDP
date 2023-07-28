@@ -14,7 +14,7 @@ def crop_q_between(mat_q, old_start, old_end, new_start, new_end):
     beg_offset = count_points_between(old_start, new_start)
     end_offset = count_points_between(new_end, old_end)
 
-    return mat_q[beg_offset:-end_offset]
+    return mat_q[beg_offset:len(mat_q) if end_offset == 0 else -end_offset]
 
 
 def split_weekdays_and_weekends(mat_c, start_date: datetime, end_date: datetime):
