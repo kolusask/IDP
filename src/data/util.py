@@ -1,12 +1,14 @@
 import torch
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 POINTS_PER_HOUR = 60 // 15
+POINTS_PER_DAY = POINTS_PER_HOUR * 24
 
 
 def count_points_between(start_date: datetime, end_date: datetime):
-    return int((end_date - start_date).total_seconds() // 3600 * POINTS_PER_HOUR)
+    return int((end_date - start_date).total_seconds()
+               // 3600 * POINTS_PER_HOUR)
 
 
 def crop_q_between(mat_q, old_start, old_end, new_start, new_end):
@@ -17,13 +19,27 @@ def crop_q_between(mat_q, old_start, old_end, new_start, new_end):
     return mat_q[beg_offset:len(mat_q) if end_offset == 0 else -end_offset]
 
 
-def split_weekdays_and_weekends(mat_c, start_date: datetime, end_date: datetime):
-    assert start_date.hour == 0 and start_date.minute == 0 and start_date.second == 0 and start_date.microsecond == 0
-    assert end_date.hour == 0 and end_date.minute == 0 and end_date.second == 0 and end_date.microsecond == 0
+def extract_week_day(mat, start_date: datetime, weekday: int):
+    assert len(mat) % POINTS_PER_DAY == 0
+    return mat[
+        (torch.arange(len(mat) // POINTS_PER_DAY) + start_date.weekday())
+        .repeat_interleave(POINTS_PER_DAY) % 7 == weekday
+    ]
 
-    weekend_mask = torch.tensor([(start_date + timedelta(days=d)).weekday() in [5, 6] for d in range((end_date - start_date).days)])\
-        .repeat_interleave(POINTS_PER_HOUR * 24)
-    weekdays = mat_c[~weekend_mask]
-    weekends = mat_c[weekend_mask]
+
+def split_weekdays_and_weekends(mat, start_date: datetime, end_date: datetime):
+    assert start_date.hour == 0\
+        and start_date.minute == 0\
+        and start_date.second == 0\
+        and start_date.microsecond == 0
+    assert end_date.hour == 0\
+        and end_date.minute == 0\
+        and end_date.second == 0\
+        and end_date.microsecond == 0
+
+    weekdays = torch.stack([extract_week_day(mat, start_date, d)
+                           for d in range(5)]).t().flatten(0, 0)
+    weekends = torch.stack([extract_week_day(mat, start_date, d)
+                           for d in range(5, 7)]).t().flatten(0, 0)
 
     return weekdays, weekends
