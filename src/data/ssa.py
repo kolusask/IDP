@@ -19,9 +19,17 @@ class SSA:
             I = [torch.arange(I[i], I[i + 1]) for i in range(len(I) - 1)]
         elif type(I) is list:
             used_groups = torch.zeros(self.L, dtype=bool)
+            list_type = None
+            tensor_list = []
             for i in I:
+                assert list_type is None or type(i) is list_type
+                list_type = type(i)
+                if list_type is int:
+                    i = torch.arange(sum(used_groups), sum(used_groups) + i, dtype=int)
                 assert len(i.shape) == 1 and sum(used_groups[i]) == 0
+                tensor_list.append(i)
                 used_groups[i] = True
+            I = tensor_list
         elif type(I) is torch.tensor:
             assert (len(I.shape) == 1 and I.shape <= (self.L,))\
                 or (len(I.shape) == 2 and I.shape[0] + I.shape[1] <= self.L)
@@ -122,9 +130,10 @@ class SSA:
         tau = self._embed(x)
         U, S, Vh = SSA._svd(tau)
         y = torch.zeros(len(self.I), len(x) + M)
-        y[:, :len(x)] = self._to_sequences(U, S, Vh)
-        P = U.T[:, :self.L - 1]
-        pi = U.T[:, self.L - 1]
+        rec = self._to_sequences(U, S, Vh)
+        y = torch.concat([rec, torch.zeros(len(rec), M)], dim=1)
+        P = U.T[:, :-1]
+        pi = U.T[:, -1]
         for i, g in enumerate(self.I):
             pi_g = pi[g]
             nu_2 = pi_g @ pi_g
@@ -133,3 +142,30 @@ class SSA:
                 y[i, m] = R @ y[i, m - len(R):m]
         
         return y
+
+
+class SequentialSSA:
+    def __init__(self,
+                 L_trend: int, I: int | List[list | torch.Tensor] | torch.Tensor):
+        self.trend_ssa = SSA(L_trend, 2)
+        self.I = I
+    
+    def ssa(self, x):
+        return self._extract_trend(SSA.ssa, x)
+    
+    def ov_ssa(self, x, Z, q):
+        # TODO: Extract
+        return self.trend_ssa.ov_ssa(x, Z, q)
+    
+    def forecast(self, x, M):
+        return self._extract_trend(SSA.forecast, x, M)
+    
+    def _extract_trend(self, fn, x, *args):
+        trend_resid = fn(self.trend_ssa, x, *args)
+        trend = trend_resid[0]
+        resid = trend_resid[1]
+        del trend_resid
+        L = len(x) // 2
+        resid = fn(SSA(L, self.I), resid[:len(x)], *args)
+
+        return torch.row_stack([trend.unsqueeze(0), resid])
