@@ -37,10 +37,10 @@ def split_weekdays_and_weekends(mat, start_date: datetime, end_date: datetime):
         and end_date.second == 0\
         and end_date.microsecond == 0
 
-    weekdays = torch.stack([extract_week_day(mat, start_date, d)
-                           for d in range(5)]).t().flatten(0, 0)
-    weekends = torch.stack([extract_week_day(mat, start_date, d)
-                           for d in range(5, 7)]).t().flatten(0, 0)
+    weekdays = torch.row_stack([extract_week_day(mat, start_date, d)
+                           for d in range(5)]).flatten(0, 0)
+    weekends = torch.row_stack([extract_week_day(mat, start_date, d)
+                           for d in range(5, 7)]).flatten(0, 0)
 
     return weekdays, weekends
 
