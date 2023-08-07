@@ -50,7 +50,7 @@ def pre_train_dbn(model: DBN, train_loader: torch.utils.data.DataLoader,
         
     return model
     
-def train_dbm(model: DBN, train_loader: torch.utils.data.DataLoader,
+def train_dbn(model: DBN, train_loader: torch.utils.data.DataLoader,
               n_epochs: int=20, learning_rate: float=0.01, 
               print_every: int=10):
     optimizer = Adam(model.parameters(), learning_rate)
