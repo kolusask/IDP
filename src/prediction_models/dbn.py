@@ -25,7 +25,7 @@ class DBN(nn.Module):
         return v
 
 
-def pre_train_dbm(model: DBN, train_loader: torch.utils.data.DataLoader,
+def pre_train_dbn(model: DBN, train_loader: torch.utils.data.DataLoader,
                   n_epochs: int=20, learning_rate: float=0.01,
                   print_every: int=10):
     for epoch in range(n_epochs):
