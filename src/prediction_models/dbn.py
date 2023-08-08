@@ -29,34 +29,53 @@ def pre_train_dbn(model: DBN, train_loader: torch.utils.data.DataLoader,
                   n_epochs: int=20, learning_rate: float=0.01,
                   print_every: int=10):
     for epoch in range(n_epochs):
-        data = [d for d, _ in train_loader]
-        for m, rbm in enumerate(model.rbms):
-            optimizer = torch.optim.Adam(rbm.parameters(), learning_rate)
-            next_data = []
-            losses = []
-            for sample in data:
+        if epoch % print_every == 0:
+            print(f'Epoch {epoch}:')
+        for data in train_loader:
+            for m, rbm in enumerate(model.rbms):
+                optimizer = torch.optim.Adam(rbm.parameters(), learning_rate)
+
                 rbm.train(True)
-                v, v_gibbs, h = rbm(sample)
-                loss = rbm.free_energy(v) - rbm.free_energy(v_gibbs)
+                v, v_gibbs, h = rbm(data)
                 optimizer.zero_grad()
+                loss = rbm.free_energy(v) - rbm.free_energy(v_gibbs)
                 loss.backward()
                 optimizer.step()
                 rbm.train(False)
-                next_data.append(h.detach())
-                losses.append(loss.detach())
-            if epoch % print_every == 0:
-                print(f'Epoch {epoch}, Machine {m}:\tLoss: {mean(losses)}')
-            data = next_data
+
+                if epoch % print_every == 0:
+                    print(f'\tMachine {m}: Loss={loss.item()}')
+
+                data = h.detach()
+        # data = [d for d, _ in train_loader]
+        # for m, rbm in enumerate(model.rbms):
+        #     optimizer = torch.optim.Adam(rbm.parameters(), learning_rate)
+        #     next_data = []
+        #     losses = []
+        #     for sample in data:
+        #         rbm.train(True)
+        #         v, v_gibbs, h = rbm(sample)
+        #         loss = rbm.free_energy(v) - rbm.free_energy(v_gibbs)
+        #         optimizer.zero_grad()
+        #         loss.backward()
+        #         optimizer.step()
+        #         rbm.train(False)
+        #         next_data.append(h.detach())
+        #         losses.append(loss.detach())
+        #     if epoch % print_every == 0:
+        #         print(f'Epoch {epoch}, Machine {m}:\tLoss: {mean(losses)}')
+        #     data = next_data
         
     return model
     
+
 def train_dbn(model: DBN, train_loader: torch.utils.data.DataLoader,
               n_epochs: int=20, learning_rate: float=0.01, 
               print_every: int=10):
     optimizer = Adam(model.parameters(), learning_rate)
     loss_fn = nn.CrossEntropyLoss()
 
-    model.train()
+    model.train(True)
 
     losses = []
     for epoch in range(n_epochs):
