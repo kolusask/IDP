@@ -38,7 +38,7 @@ def split_sections_into_groups(mat_r, alpha):
 
 
 def get_compression_matrix(mat_q, groups):
-    representatives = torch.stack([g[0] for g, _, _ in groups])
+    representatives = torch.tensor([g[0] for g in groups])
     mat_c = mat_q[:, representatives]
     assert mat_c.shape == (mat_q.shape[0], len(groups))
 
