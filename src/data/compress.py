@@ -1,49 +1,40 @@
 import torch
 
+
 def build_correlation_matrix(mat_q):
-    d, p = mat_q.shape
-    mat_q_normalized = mat_q - mat_q.mean(dim=0)
-    mat_r = torch.zeros(p, p)
-    for i in range(p):
-        for j in range(i, p):
-            i_col = mat_q_normalized[:, i]
-            j_col = mat_q_normalized[:, j]
-            i_norm = max(torch.norm(i_col), 1e-12)
-            j_norm = max(torch.norm(j_col), 1e-12)
-            if i_norm == 0 or j_norm == 0:
-                if i_norm == j_norm:
-                    mat_r[i][j] = 1
-                else:
-                    mat_r[i][j] = 0
-            else:
-                mat_r[i][j] = (i_col @ j_col) / i_norm / j_norm
-            mat_r[j][i] = mat_r[i][j]
-    
-    return mat_r / mat_r.max()
+    return torch.corrcoef(mat_q.T).nan_to_num(0)
 
 
 def split_sections_into_groups(mat_r, alpha):
-    n_sections, _ = mat_r.shape
-    n_ungrouped = n_sections
+    mat_r = torch.abs(mat_r)
+    ungrouped = torch.ones(len(mat_r), dtype=bool)
     groups = []
 
-    mat_r_copy = mat_r - torch.diag(mat_r.diag())
-    while n_ungrouped > 0:
-        new_group_idx = torch.nonzero(mat_r_copy > alpha)
-        if len(new_group_idx) > 0:
-            corr = mat_r[new_group_idx[:, 0], new_group_idx[:, 1]]
-            new_group_idx = new_group_idx[:, 0].unique()
-
-            n_ungrouped -= len(new_group_idx)
-            mat_r_copy[new_group_idx, :] = 0
-            mat_r_copy[:, new_group_idx] = 0
-            groups.append((new_group_idx, corr.min(), corr.max()))
-            if mat_r_copy.max() == 0:
-                break
-            else:
-                mat_r_copy /= mat_r_copy.max()
+    def _new_group():
+        nonlocal ungrouped, group_queue, current_group
+        s = ungrouped.to(dtype=int).argmax().item()
+        ungrouped[s] = False
+        group_queue = [s,]
+        current_group = [s,]
     
-    return groups, n_ungrouped
+    _new_group()
+
+    while ungrouped.sum() > 0:
+        if not group_queue:
+            groups.append(current_group)
+            _new_group()
+        
+        section = group_queue.pop()
+        correlated = torch.bitwise_and(mat_r[section] > alpha, ungrouped)
+        correlated[section] = False
+        correlated = torch.where(correlated)[0].tolist()
+        current_group += correlated
+        group_queue += correlated
+        ungrouped[correlated] = False
+    
+    groups.append(current_group)
+    
+    return groups
 
 
 def get_compression_matrix(mat_q, groups):
