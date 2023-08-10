@@ -1,9 +1,15 @@
 import torch
 
 
-def build_correlation_matrix(mat_q):
-    return torch.corrcoef(mat_q.T).nan_to_num(0)
-
+def build_correlation_matrix(mat_q, remove_empty=False):
+    mat = torch.corrcoef(mat_q.T).nan_to_num(0)
+    if remove_empty:
+        nonempty = mat.diag() > 0
+        mat = mat[nonempty, :][:, nonempty]
+        nonempty = torch.where(nonempty)[0]
+        return mat, nonempty
+    else:
+        return mat
 
 def split_sections_into_groups(mat_r, alpha):
     mat_r = torch.abs(mat_r)
