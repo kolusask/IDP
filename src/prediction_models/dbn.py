@@ -44,7 +44,7 @@ def pre_train_dbn(model: DBN, train_loader: torch.utils.data.DataLoader,
                 rbm.train(False)
 
                 if epoch % print_every == 0:
-                    print(f'\tMachine {m}: Loss={loss.item()}')
+                    print(f'\tRBM {m}: Loss={loss.item()}')
 
                 data = h.detach()
         # data = [d for d, _ in train_loader]
@@ -70,10 +70,9 @@ def pre_train_dbn(model: DBN, train_loader: torch.utils.data.DataLoader,
     
 
 def train_dbn(model: DBN, train_loader: torch.utils.data.DataLoader,
-              n_epochs: int=20, learning_rate: float=0.01, 
-              print_every: int=10):
+              loss_fn: torch.nn.Module, n_epochs: int=20,
+              learning_rate: float=0.01, print_every: int=10):
     optimizer = Adam(model.parameters(), learning_rate)
-    loss_fn = nn.CrossEntropyLoss()
 
     model.train(True)
 

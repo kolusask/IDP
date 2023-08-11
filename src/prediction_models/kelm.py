@@ -8,7 +8,7 @@ class KELM:
     def fit(self,
             X: torch.TensorType,
             y: torch.TensorType,
-            reg_coeff: float = 1.0, gamma: float = 1.0, clean: bool = True):
+            reg_coeff: float = 1.0, gamma: float = 1.0):
         M, N = X.shape
         M, C = y.shape
         assert M == len(X)
@@ -16,6 +16,11 @@ class KELM:
         omega = self._kernel(X, X)
         self._beta = torch.inverse(torch.eye(M) / reg_coeff + omega) @ y
         self._data = X
+
+    def random_fit(self, M: int, N: int, C: int, reg_coeff: float = 1.0, gamma: float = 1.0):
+        X = torch.rand(M, N, dtype=torch.float32)
+        y = torch.rand(M, C, dtype=torch.float32)
+        self.fit(X, y, reg_coeff=reg_coeff, gamma=gamma)
 
     def __call__(self, X: torch.TensorType) -> torch.TensorType:
         return self.predict(X)

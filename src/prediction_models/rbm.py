@@ -56,9 +56,9 @@ class RBM(nn.Module):
         """
         h = self.prop_forward(v)
         for _ in range(self.k):
-            v_gibb = self.prop_backward(h)
-            h = self.prop_forward(v_gibb)
-        return v, v_gibb, h
+            v_gibbs = self.prop_backward(h)
+            h = self.prop_forward(v_gibbs)
+        return v, v_gibbs, h
 
 def train_rbm(model: RBM, train_loader: data.DataLoader, n_epochs: int=20, lr: float=0.01, print_every=10):
     optimizer = torch.optim.Adam(model.parameters(), lr)
