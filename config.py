@@ -1,8 +1,16 @@
 import os
 import sys
+import torch
+from warnings import warn
 
 from json import load
 
+
+if torch.cuda.is_available():
+    device = torch.device('cuda')
+else:
+    warn('CUDA is not available')
+    device = torch.device('cpu')
 
 with open('config.json') as config:
     CONFIG = load(config)

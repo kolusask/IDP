@@ -13,7 +13,7 @@ def build_correlation_matrix(mat_q, remove_empty=False):
 
 def split_sections_into_groups(mat_r, alpha):
     mat_r = torch.abs(mat_r)
-    ungrouped = torch.ones(len(mat_r), dtype=bool)
+    ungrouped = torch.ones(len(mat_r), dtype=bool, device=mat_r.device)
     groups = []
 
     def _new_group():

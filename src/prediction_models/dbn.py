@@ -26,12 +26,13 @@ class DBN(nn.Module):
 
 
 def pre_train_dbn(model: DBN, train_loader: torch.utils.data.DataLoader,
-                  n_epochs: int=20, learning_rate: float=0.01,
+                  device, n_epochs: int=20, learning_rate: float=0.01,
                   print_every: int=10):
     for epoch in range(n_epochs):
         if epoch % print_every == 0:
             print(f'Epoch {epoch}:')
         for data in train_loader:
+            data = data.to(device)
             for m, rbm in enumerate(model.rbms):
                 optimizer = torch.optim.Adam(rbm.parameters(), learning_rate)
 

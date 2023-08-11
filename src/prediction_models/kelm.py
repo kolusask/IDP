@@ -14,12 +14,12 @@ class KELM:
         assert M == len(X)
         self._gamma = gamma
         omega = self._kernel(X, X)
-        self._beta = torch.inverse(torch.eye(M) / reg_coeff + omega) @ y
+        self._beta = torch.inverse(torch.eye(M, device=X.device) / reg_coeff + omega) @ y
         self._data = X
 
-    def random_fit(self, M: int, N: int, C: int, reg_coeff: float = 1.0, gamma: float = 1.0):
-        X = torch.rand(M, N, dtype=torch.float32)
-        y = torch.rand(M, C, dtype=torch.float32)
+    def random_fit(self, device, M: int, N: int, C: int, reg_coeff: float = 1.0, gamma: float = 1.0):
+        X = torch.rand(M, N, dtype=torch.float32, device=device)
+        y = torch.rand(M, C, dtype=torch.float32, device=device)
         self.fit(X, y, reg_coeff=reg_coeff, gamma=gamma)
 
     def __call__(self, X: torch.TensorType) -> torch.TensorType:
