@@ -1,3 +1,5 @@
+from globals import Period
+
 import numpy as np
 import pandas as pd
 
@@ -16,7 +18,6 @@ def norm_int_id(id):
 class DetectorDataProvider:
     def __init__(self, data_path: str):
         self.data_path = join(data_path, 'Ampeldaten_20220525_SP')
-        self.DELETEME = set()
 
     def list_intersections(self):
         return listdir(self.data_path)
@@ -40,21 +41,18 @@ class DetectorDataProvider:
         csv['DATUM'] = pd.to_datetime(csv['DATUM'], errors='coerce')
         csv = csv.merge(timestamps, how='outer', on='DATUM')
 
-        if len(csv) not in self.DELETEME:
-            self.DELETEME.add(len(csv))
-            print(int_id, len(csv), file_name)
-
         return csv
     
-    def get_data_for_period(self, int_id, start: datetime, end: datetime):
+    def get_data_for_period(self, int_id, period: Period):
+        start, end = period
         int_id = norm_int_id(int_id)
         data = []
         for date in (start + timedelta(days=n) for n in range((end - start).days)):
             data.append(self.get_data_for_day(int_id, date.day, date.month))
         return pd.concat(data).set_index('DATUM')
     
-    def get_counts_entering_section(self, section_end, detectors, start_date, end_date):
-        section_data = self.get_data_for_period(section_end, start_date, end_date)
+    def get_counts_entering_section(self, section_end, detectors, period: Period):
+        section_data = self.get_data_for_period(section_end, period)
         for col in section_data.columns:
             section_data[col] = pd.to_numeric(section_data[col], errors='coerce')
 
