@@ -2,7 +2,13 @@ import torch
 
 
 def build_correlation_matrix(mat_q, remove_empty=False):
-    mat = torch.corrcoef(mat_q.T).nan_to_num(0)
+    usable = torch.ones(mat_q.shape[1], dtype=bool)
+    if remove_empty:
+        usable[mat_q.sum(dim=0) == 0] = False
+
+    return torch.corrcoef(mat_q.T[usable]).nan_to_num(0), usable
+
+
     if remove_empty:
         nonempty = mat.diag() > 0
         mat = mat[nonempty, :][:, nonempty]

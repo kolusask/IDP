@@ -25,7 +25,8 @@ class Config:
                  alpha: int,
                  dbn_hidden_layer_sizes: List[int] | int,
                  gibbs_sampling_steps: int,
-                 time_window_length: int):
+                 time_window_length: int,
+                 data_split: List[float]):
         if torch.cuda.is_available():
             self.device = torch.device('cuda')
         else:
@@ -36,6 +37,7 @@ class Config:
         if not os.path.exists(self.outputs_folder):
             os.makedirs(self.outputs_folder)
 
+        assert read_period[0] <= train_period[0] < train_period[1] <= read_period[1]
         self.read_period = read_period
         self.train_period = train_period
         self.spectral_threshold = spectral_threshold
@@ -45,6 +47,10 @@ class Config:
         self.dbn_hidden_layer_sizes = dbn_hidden_layer_sizes
         self.gibbs_sampling_steps = gibbs_sampling_steps
         self.time_window_length = time_window_length
+        assert 0. < data_split[0] < 1.
+        assert 0. < data_split[1] < 1.
+        assert sum(data_split) < 1.
+        self.data_split = data_split
 
     def from_json(config_file_path: str) -> 'Config':
         with open('config.json') as config:
@@ -64,7 +70,8 @@ class Config:
             json['ALPHA'],
             json['DBN_HIDDEN_LAYER_SIZES'],
             json['GIBBS_SAMPLING_STEPS'],
-            json['TIME_WINDOW_LENGTH']
+            json['TIME_WINDOW_LENGTH'],
+            json['DATA_SPLIT']
         )
 
     def _parse_date(date_str: str):

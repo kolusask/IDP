@@ -12,5 +12,6 @@ dependencies:
   - pip
   - pytables
   - scikit-learn
+  - torchmetrics
   - pip:
     - torch

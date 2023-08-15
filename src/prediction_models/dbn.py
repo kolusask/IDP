@@ -27,11 +27,12 @@ class DBN(nn.Module):
 
 def pre_train_dbn(model: DBN, train_loader: torch.utils.data.DataLoader,
                   device, n_epochs: int=20, learning_rate: float=0.01,
-                  print_every: int=10):
+                  print_each: int=10):
     for epoch in range(n_epochs):
-        if epoch % print_every == 0:
-            print(f'Epoch {epoch}:')
+        epoch_losses = torch.zeros(len(model.rbms))
+        n_data_points = 0
         for data in train_loader:
+            n_data_points += 1
             data = data.to(device)
             for m, rbm in enumerate(model.rbms):
                 optimizer = torch.optim.Adam(rbm.parameters(), learning_rate)
@@ -44,29 +45,14 @@ def pre_train_dbn(model: DBN, train_loader: torch.utils.data.DataLoader,
                 optimizer.step()
                 rbm.train(False)
 
-                if epoch % print_every == 0:
-                    print(f'\tRBM {m}: Loss={loss.item()}')
-
                 data = h.detach()
-        # data = [d for d, _ in train_loader]
-        # for m, rbm in enumerate(model.rbms):
-        #     optimizer = torch.optim.Adam(rbm.parameters(), learning_rate)
-        #     next_data = []
-        #     losses = []
-        #     for sample in data:
-        #         rbm.train(True)
-        #         v, v_gibbs, h = rbm(sample)
-        #         loss = rbm.free_energy(v) - rbm.free_energy(v_gibbs)
-        #         optimizer.zero_grad()
-        #         loss.backward()
-        #         optimizer.step()
-        #         rbm.train(False)
-        #         next_data.append(h.detach())
-        #         losses.append(loss.detach())
-        #     if epoch % print_every == 0:
-        #         print(f'Epoch {epoch}, Machine {m}:\tLoss: {mean(losses)}')
-        #     data = next_data
-        
+                epoch_losses[m] += loss.item()
+        if print_each > 0 and epoch % print_each == 0:
+            print(f'Epoch {epoch}:')
+            epoch_losses /= n_data_points
+            for m, loss in enumerate(epoch_losses):
+                print(f'\tRBM {m}: Loss={loss}')
+
     return model
     
 
