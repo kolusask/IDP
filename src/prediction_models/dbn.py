@@ -13,12 +13,12 @@ from numpy import mean
 class DBN(nn.Module):
     def __init__(self, input_size : int, output_sizes : List[int], k: int=1):
         super(DBN, self).__init__()
-        self.rbms = nn.ModuleList()
+        self.rbms: List[RBM] = nn.ModuleList()
         for os in output_sizes:
             self.rbms.append(RBM(input_size, os, k))
             input_size = os
     
-    def forward(self, v):
+    def forward(self, v) -> torch.FloatTensor:
         for rbm in self.rbms:
             v = rbm.prop_forward(v)
         
