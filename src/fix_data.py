@@ -1,3 +1,4 @@
+from io import StringIO
 from sys import argv
 from os import path, listdir, makedirs
 from pandas import read_csv, DataFrame
@@ -27,11 +28,7 @@ def process_headers(in_det_path: str, out_det_path: str):
     for day in listdir(in_det_path):
         in_day_path = path.join(in_det_path, day)
         out_day_path = path.join(out_det_path, day)
-        if det == '3050':
-            df = read_csv(in_day_path, sep=None, on_bad_lines='skip', engine='python',
-                names=['DATUM', '1(DA1)', '2(DA2)', '4(DAL)', '5(DB1)', '6(DB2)', '7(DB3)', '8(DC1)', '9(DC2)', '10(DD1)'])
-        else:
-            df = read_csv(in_day_path, sep=None, on_bad_lines='skip', engine='python')
+        df = read_csv(in_day_path, sep=None, on_bad_lines='skip', engine='python')
         if 'Unnamed' in df.columns[0]:
             df.drop(columns=df.columns[0], axis=1, inplace=True)
         if df.columns[0] != 'DATUM':
@@ -60,8 +57,10 @@ def fix_missing_headers(in_det_path: str, out_det_path: str, files_missing_heade
 def fix_wrong_headers(in_det_path: str, files_with_wrong_header: List[str], headers: Dict[int, str]):
     for day in files_with_wrong_header:
         in_day_path = path.join(in_det_path, day)
-        n_columns = len(read_csv(in_day_path, sep=None, on_bad_lines='skip', engine='python').columns)
-        read_csv(in_day_path, sep=None, names=headers[n_columns], on_bad_lines='skip', engine='python')\
+        with open(in_day_path, 'r') as csv:
+            text = csv.read()
+        n_columns = len(text.split('\n')[1].split(';'))
+        read_csv(StringIO(text), sep=None, names=headers[n_columns], on_bad_lines='skip', engine='python')\
             .iloc[1:].set_index('DATUM').to_csv(in_day_path, sep=';')
 
 def process_detector(det: str):
@@ -75,9 +74,26 @@ def process_detector(det: str):
     read_csv(d20211031, sep=';').drop(index=list(range(8, 12))).to_csv(d20211031, sep=';')
 
 
+det_3050_20211017_path = path.join(in_dir_path, '3050', 'Detektorzaehlwerte', 'DetCount_20211017.csv')
+with open(det_3050_20211017_path, 'r') as det_3050_20211017_file:
+    det_3050_20211017_lines = det_3050_20211017_file.readlines()
+det_3050_20211017_lines[:5] = [
+    'DATUM;1(DA1);2(DA2);4(DAL);5(DB1);6(DB2);7(DB3);8(DC1);9(DC2);10(DD1)',
+    '2021-10-17 00:00:00;0;0;0;0;0;0;0;0;0',
+    '2021-10-17 00:15:00;0;0;0;0;0;0;0;0;0',
+    '2021-10-17 00:30:00;0;0;0;0;0;0;0;0;0',
+    '2021-10-17 00:45:00;0;0;0;0;0;0;0;0;0',
+]
+with open(det_3050_20211017_path, 'w') as det_3050_20211017_file:
+    det_3050_20211017_file.write('\n'.join(det_3050_20211017_lines))
+
+
 detectors = listdir(in_dir_path)
-for i, det in enumerate(detectors):
-    if det not in ['2040', '4170', '8007']:
+ignore = []
+ignore += ['2040', '4170', '8007']  # empty
+# for i, det in enumerate(detectors):
+for i, det in enumerate(['3050']):
+    if det not in ignore:
         print(f'{det} - {i + 1}/{len(detectors)}')
         process_detector(det)
 
