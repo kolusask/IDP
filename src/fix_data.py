@@ -1,9 +1,9 @@
 from io import StringIO
 from sys import argv
 from os import path, listdir, makedirs
-from pandas import read_csv, DataFrame
-from pandas.errors import ParserError
-from pprint import pprint
+
+from pandas import read_csv
+
 from shutil import copyfile, move, rmtree
 from typing import List, Dict
 
@@ -22,9 +22,9 @@ def prepare_int_paths(int: str):
     return in_int_path, out_int_path
 
 def process_headers(in_int_path: str, out_int_path: str):
-    headers = {}
     files_missing_header = []
     files_with_wrong_header = []
+    header = None
     for day in listdir(in_int_path):
         in_day_path = path.join(in_int_path, day)
         out_day_path = path.join(out_int_path, day)
@@ -36,22 +36,19 @@ def process_headers(in_int_path: str, out_int_path: str):
         elif 'Unnamed' in df.columns[1]:
             files_with_wrong_header.append(day)
         else:
-            headers[len(df.columns)] = df.columns
+            if header is None:
+                header = list(df.columns)
+            else:
+                assert header == list(df.columns)
             df.set_index('DATUM').to_csv(out_day_path, sep=';')
-    assert headers
+    assert header
 
+    return header, files_missing_header, files_with_wrong_header
 
-    return headers, files_missing_header, files_with_wrong_header
-
-def fix_missing_headers(in_int_path: str, out_int_path: str, files_missing_header: List[str], headers: Dict[int, str]):
+def fix_missing_headers(in_int_path: str, out_int_path: str, files_missing_header: List[str], header: List[str]):
     for day in files_missing_header:
         in_day_path = path.join(in_int_path, day)
         out_day_path = path.join(out_int_path, day)
-        n_columns = len(read_csv(in_day_path, sep=None, on_bad_lines='skip', engine='python').columns)
-        try:
-            header = headers[n_columns]
-        except KeyError:
-            header = next(h for h in headers.values())
         read_csv(in_day_path, sep=None, names=header, on_bad_lines='skip', engine='python')\
             .set_index('DATUM').to_csv(out_day_path, sep=';')
 
@@ -65,25 +62,23 @@ def fill_first_rows_with_zeros(in_day_path: str, n_zeros: int):
     with open(in_day_path, 'w') as file:
         file.write(''.join(lines))
 
-def fix_wrong_headers(in_int_path: str, out_int_path: str, files_with_wrong_header: List[str], headers: Dict[int, str]):
-    assert len(headers) == 1
-    header = headers[list(headers.keys())[0]]
+def fix_wrong_headers(in_int_path: str, out_int_path: str, files_with_wrong_header: List[str], header: List[str]):
     for day in files_with_wrong_header:
         in_day_path = path.join(in_int_path, day)
         out_day_path = path.join(out_int_path, day)
-        fill_first_rows_with_zeros(in_day_path, list(headers.keys())[0] - 1)
+        fill_first_rows_with_zeros(in_day_path, len(header) - 1)
         with open(in_day_path, 'r') as csv:
             text = csv.read()
         n_columns = len(text.split('\n')[1].split(';'))
-        read_csv(StringIO(text), sep=None, names=headers[n_columns], on_bad_lines='skip', engine='python')\
+        read_csv(StringIO(text), sep=None, names=header, on_bad_lines='skip', engine='python')\
             .iloc[1:].set_index('DATUM').to_csv(out_day_path, sep=';')
 
 def process_intersection(int: str):
     in_int_path, out_int_path = prepare_int_paths(int)
-    headers, files_missing_header, files_with_wrong_header = process_headers(in_int_path, out_int_path)
+    header, files_missing_header, files_with_wrong_header = process_headers(in_int_path, out_int_path)
 
-    fix_missing_headers(in_int_path, out_int_path, files_missing_header, headers)
-    fix_wrong_headers(in_int_path, out_int_path, files_with_wrong_header, headers)
+    fix_missing_headers(in_int_path, out_int_path, files_missing_header, header)
+    fix_wrong_headers(in_int_path, out_int_path, files_with_wrong_header, header)
 
     d20211031 = path.join(out_int_path, 'DetCount_20211031.csv')
     read_csv(d20211031, sep=';').drop(index=list(range(8, 12))).to_csv(d20211031, sep=';')
@@ -97,6 +92,7 @@ with open(int_3050_20211017_path, 'w') as int_3050_20211017_file:
     int_3050_20211017_file.write(''.join(int_3050_20211017_lines))
 
 def split_intersection(in_int: str, split_groups: Dict[str, List[str]], remove_original=True):
+    print(f'Splitting {in_int}...', end='')
     temp_dir_path = path.join(out_dir_path, in_int + '_unsplit')
     in_int_dir_path = path.join(temp_dir_path, int_subdir_name)
     if not path.exists(in_int_dir_path):
@@ -112,10 +108,7 @@ def split_intersection(in_int: str, split_groups: Dict[str, List[str]], remove_o
             df[['DATUM'] + detectors].set_index('DATUM').to_csv(path.join(out_int_dir_path, day))
     if remove_original:
         rmtree(temp_dir_path)
-
-# fill_first_rows_with_zeros('3050', '20211017', 9)
-# fill_first_rows_with_zeros('3060', '20210621', 10)
-# fill_first_rows_with_zeros('0036', '20211025', 6)
+    print('Done')
 
 intersections = listdir(in_dir_path)
 ignore = []
