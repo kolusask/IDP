@@ -73,8 +73,8 @@ class LookUpTable:
             # '5090_Teilknoten 2',    # confusing - discuss
             # '5090_Teilknoten 3',    # confusing - discuss
             # '5090_Teilknoten 4',    # confusing - discuss
-            '6010_F1a',             # -//-
-            '6010_F1b',             # -//-
+            # '6010_F1a',             # -//-
+            # '6010_F1b',             # -//-
             '6021',                 # 2 types of headers in files
             # '6060',                 # conflicting detector names - 13(DA4) vs 13(DD4)
             '7',                    # no traffic detector

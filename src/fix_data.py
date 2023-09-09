@@ -137,6 +137,10 @@ split_intersection('5090', {
     '5090_Teilknoten 1': ['7(DD1)', '8(DE1)', '9(DE2)'],
     '5090_Teilknoten 2': ['1(DA1)'],
 })
+split_intersection('6010', {
+    '6010_F1a': ['1(RES1)', '2(DE1)', '3(DE2)', '4(DH1)', '5(DH2)', '6(DDL1)', '7(DDL2)'],
+    '6010_F1b': ['8(DAL1)', '9(RES2)', '10(DBR1)', '11(DBR2)'],
+})
 
 
 lut_name = 'Look Up Table (Detectors Mapping on links).xlsx'
