@@ -137,4 +137,4 @@ split_intersection('6010', {
 
 
 lut_name = 'Look Up Table (Detectors Mapping on links).xlsx'
-copyfile(path.join(argv[1], '..', lut_name), path.join(argv[1], lut_name))
+copyfile(path.join(argv[1], '..', lut_name), path.join(argv[2], lut_name))
