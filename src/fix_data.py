@@ -69,7 +69,6 @@ def fix_wrong_headers(in_int_path: str, out_int_path: str, files_with_wrong_head
         fill_first_rows_with_zeros(in_day_path, len(header) - 1)
         with open(in_day_path, 'r') as csv:
             text = csv.read()
-        n_columns = len(text.split('\n')[1].split(';'))
         read_csv(StringIO(text), sep=None, names=header, on_bad_lines='skip', engine='python')\
             .iloc[1:].set_index('DATUM').to_csv(out_day_path, sep=';')
 
@@ -105,7 +104,7 @@ def split_intersection(in_int: str, split_groups: Dict[str, List[str]], remove_o
             out_int_dir_path = path.join(out_dir_path, out_int, int_subdir_name)
             if not path.exists(out_int_dir_path):
                 makedirs(out_int_dir_path)
-            df[['DATUM'] + detectors].set_index('DATUM').to_csv(path.join(out_int_dir_path, day))
+            df[['DATUM'] + detectors].set_index('DATUM').to_csv(path.join(out_int_dir_path, day), sep=';')
     if remove_original:
         rmtree(temp_dir_path)
     print('Done')
@@ -127,7 +126,7 @@ split_intersection('3060', {
     })
 split_intersection('5090', {
     '5090': ['2(DA2)', '3(DB1)', '4(DB2)', '5(DC1)', '6(DC2)'],
-    '5090_Teilknoten 1': ['7(DD1)', '8(DE1)', '9(DE2)'],
+    '5090_Teilknoten 1': ['7(DD1)', '8(DE1)', '9(DE2)', '10(DE3)', '11(DF1)', '12(DG1)'],
     '5090_Teilknoten 2': ['1(DA1)'],
 })
 split_intersection('6010', {
