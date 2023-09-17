@@ -49,6 +49,7 @@ class DetectorDataProvider:
         data = []
         for date in (start + timedelta(days=n) for n in range((end - start).days)):
             data.append(self.get_data_for_day(int_id, date.day, date.month))
+            
         return pd.concat(data).set_index('DATUM')
     
     def get_counts_entering_section(self, section_end, detectors, period: Period):
@@ -63,20 +64,7 @@ class LookUpTable:
     def __init__(self, data_path):
         ignore = (
             '2040',                 # missing folder - empty in the cloud
-            # '26',                   # conflicting detector names - 2(DC1) vs 2(DB1)
-            # '3050',                 # missing header
-            # '3060_G',               # confusing - discuss
-            # '3060_L',               # confusing - discuss
             '4170',                 # missing folder - empty in the cloud
-            # '42',                   # conflicting detector names
-            # '5090_Teilknoten 1',    # confusing - discuss
-            # '5090_Teilknoten 2',    # confusing - discuss
-            # '5090_Teilknoten 3',    # confusing - discuss
-            # '5090_Teilknoten 4',    # confusing - discuss
-            # '6010_F1a',             # -//-
-            # '6010_F1b',             # -//-
-            '6021',                 # 2 types of headers in files
-            # '6060',                 # conflicting detector names - 13(DA4) vs 13(DD4)
             '7',                    # no traffic detector
             '8007',                 # missing folder - empty in the cloud
             'nan',                  # ???
