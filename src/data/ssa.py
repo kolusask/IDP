@@ -1,15 +1,15 @@
 import torch
 from typing import List
-from scipy.linalg import hankel
 
 
 class SSA:
-    def __init__(self, L: int, I: int | List[list | torch.Tensor] | torch.Tensor):
+    def __init__(self, L: int, I: int | List[list | torch.Tensor] | torch.Tensor, device: torch.device):
         """
         Parameters:
             L (int):                                Embedding dimension
             I (int | list[list | tensor] | tensor): Array with elementary matrices indices
         """
+        self.device = device
         self.L = L
         self.I = self._format_I(I)
 
@@ -37,21 +37,36 @@ class SSA:
         return I
     
     def _embed(self, x):
-        return torch.from_numpy(hankel(x[:self.L], x[self.L - 1:]))
+        N, B = x.shape
+        hankel = torch.zeros(B, self.L, N - self.L + 1).to(self.device)
+        hankel[:, :, 0] = x[:self.L].T
+        hankel[:, -1] = x[self.L - 1:].T
+        for r in range(self.L - 2, -1, -1):
+            hankel[:, r, 1:] = hankel[:, r + 1][:, :-1]
+        
+        return hankel
     
     def _svd(m):
         return torch.linalg.svd(m, full_matrices=False)
     
     def _to_sequences(self, U, S, Vh):
+        # for i in range(self.L):
+        #     a = torch.outer(U[0][:, i], Vh[0][i])
+        #     b = U[:, :, i][..., None, :] * Vh[:, i][..., None]
+        #     pass
+        # elem_mat = torch.stack(
+        #     [S[i] * (torch.outer(U[:, i], Vh[i])) for i in range(self.L)])
+        # zero_mat = torch.stack(
+        #     [S[0][i] * (torch.outer(U[0][:, i], Vh[0][i])) for i in range(self.L)])
         elem_mat = torch.stack(
-            [S[i] * (torch.outer(U[:, i], Vh[i])) for i in range(self.L)])
+            [S[:, i] * (U[:, :, i][..., None, :] * Vh[:, i][..., None]).permute(2, 1, 0) for i in range(self.L)])
         grouped_mat = [torch.sum(elem_mat[g], dim=0) for g in self.I]
         for mat in grouped_mat:
-            h, w = mat.shape
+            h, w, b = mat.shape
             for i in range(0, w + h):
                 v_ind = torch.arange(max(0, i - w + 1), min(i + 1, h))
                 h_ind = torch.arange(min(i, w - 1), max(-1, i - h), -1)
-                mat[v_ind, h_ind] = mat[v_ind, h_ind].mean()
+                mat[v_ind, h_ind] = mat[v_ind, h_ind].mean(dim=0)
 
         return torch.stack([torch.concat([mat[:-1, 0], mat[-1, :]]) for mat in grouped_mat])
 
@@ -93,8 +108,8 @@ class SSA:
 
         """
         # Parameters of the algorithm
-        N = len(x)  # length of time-series
-        y = torch.zeros((len(self.I), N))
+        N, B = x.shape  # length of time-series
+        y = torch.zeros((len(self.I), N, B))
         L_B = (Z - q) / 2  # number of points discarded at each iteration
         P = (N - Z) / q + 1  # the number of iterations
 
@@ -127,21 +142,24 @@ class SSA:
     def forecast(self, x, M):
         # https://www.researchgate.net/publication/228092069_Basic_Singular_Spectrum_Analysis_and_Forecasting_with_R
 
+        N, B = x.shape
+        T = len(self.I)
+        empty_input = x.sum(dim=0) == 0
         tau = self._embed(x)
         U, S, Vh = SSA._svd(tau)
-        y = torch.zeros(len(self.I), len(x) + M)
+        del tau
         rec = self._to_sequences(U, S, Vh)
-        y = torch.concat([rec, torch.zeros(len(rec), M)], dim=1)
-        P = U.T[:, :-1]
-        pi = U.T[:, -1]
+        y = torch.concat([rec, torch.zeros(T, M, B).to(self.device)], dim=1).permute(2, 0, 1).to(self.device)
+        P = U.T[:, :-1].permute(2, 0, 1)
+        pi = U.T[:, -1].T
         for i, g in enumerate(self.I):
-            pi_g = pi[g]
-            nu_2 = pi_g @ pi_g
-            R = 1 / (1 - nu_2) * (pi_g @ P[g])
+            pi_g = pi[:, None, g]
+            nu_2 = torch.bmm(pi_g.view(B, 1, len(g)), pi_g.view(B, len(g), 1))
+            R = (1 / (1 - nu_2) * (torch.bmm(pi_g, P[:, g]))).squeeze()
             for m in range(len(x), len(x) + M):
-                y[i, m] = R @ y[i, m - len(R):m]
+                y[~empty_input, i, m] = torch.bmm(R[:, None], y[:, i, m - R.shape[1]:m][:, :, None]).squeeze()[~empty_input]
         
-        return y
+        return y.permute(1, 2, 0)
 
 
 class SequentialSSA:
@@ -149,17 +167,17 @@ class SequentialSSA:
                  L_trend: int, I: int | List[list | torch.Tensor] | torch.Tensor):
         self.trend_ssa = SSA(L_trend, 2)
         self.I = I
-    
+
     def ssa(self, x):
         return self._extract_trend(SSA.ssa, x)
-    
+
     def ov_ssa(self, x, Z, q):
         # TODO: Extract
         return self.trend_ssa.ov_ssa(x, Z, q)
-    
+
     def forecast(self, x, M):
         return self._extract_trend(SSA.forecast, x, M)
-    
+
     def _extract_trend(self, fn, x, *args):
         trend_resid = fn(self.trend_ssa, x, *args)
         trend = trend_resid[0]
