@@ -1,6 +1,9 @@
 import torchmetrics as tm
 
-from typing import Tuple
+from tqdm import tqdm
+
+from itertools import accumulate
+from typing import List, Tuple
 
 from torch.utils.data import DataLoader, Dataset
 from torch import nn
@@ -42,38 +45,64 @@ class RandomBinaryVectorDataset(Dataset):
 
 
 class SlidingWindowDataset(Dataset):
-    def __init__(self, mat: torch.FloatTensor, sliding_window_length: int, stride: int = 1):
-        self.mat = mat
+    def __init__(self, mat_list: List[torch.FloatTensor], sliding_window_length: int, stride: int = 1):
+        assert len(mat_list) > 0
+        self.mat_list = mat_list
         self.sliding_window_length = sliding_window_length
         self.stride = stride
+        mat_lengths = [(mat.shape[1] - self.sliding_window_length) // self.stride for mat in mat_list]
+        self.mat_len_acc = [0,] + [int(i) for i in accumulate(mat_lengths)]
 
     def __len__(self) -> int:
-        return (self.mat.shape[1] - self.sliding_window_length) // self.stride
-
+        return self.mat_len_acc[-1]
+    
     def __getitem__(self, index: int) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
-        index *= self.stride
-        return self.mat[:, index:index + self.sliding_window_length], self.mat[:, index + self.sliding_window_length]
+        mat_idx = next(i for i, l in enumerate(self.mat_len_acc) if l > index) - 1
+        index -= self.mat_len_acc[mat_idx]
+        mat = self.mat_list[mat_idx]
+        return mat[:, index:index + self.sliding_window_length], mat[:, index + self.sliding_window_length]
 
 
 class EncodingToPredictionDataset(Dataset):
-    def __init__(self, source_dataset: SlidingWindowDataset, dbn: DBN):
+    def __init__(self, source_dataset: SlidingWindowDataset, dbn: DBN, precompute: bool=False):
         super().__init__()
-        self.source_dataset = source_dataset
-        self.dbn = dbn
+
+        self.cache = None
+        if precompute:
+            self.cache = []
+            for i in range(len(source_dataset)):
+                X, y = source_dataset[i]
+                self.cache.append((dbn(X), y))
+        else:
+            self.source_dataset = source_dataset
+            self.dbn = dbn
 
     def __len__(self) -> int:
         return len(self.source_dataset)
 
     def __getitem__(self, index: int) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
-        X, y = self.source_dataset[index]
-        return self.dbn(X), y
+        if self.cache is None:
+            X, y = self.source_dataset[index]
+            return self.dbn(X), y
+        else:
+            return self.cache[index]
 
 
-def split_train_val_test(mat: torch.FloatTensor, train_portion: float, val_portion: float):
-    train_val_split_idx = int(len(mat) * train_portion)
-    val_test_split_idx = train_val_split_idx + int(len(mat) * val_portion)
+def split_train_val_test(mat_list: List[torch.FloatTensor], train_portion: float, val_portion: float):
+    mat_len = mat_list[0].shape[1]
+    train_val_split_idx = int(mat_len * train_portion)
+    val_test_split_idx = train_val_split_idx + int(mat_len * val_portion)
 
-    return mat[:train_val_split_idx], mat[train_val_split_idx:val_test_split_idx], mat[val_test_split_idx:]
+    train_list = []
+    val_list = []
+    test_list = []
+
+    for mat in mat_list:
+        train_list.append(mat[:, :train_val_split_idx])
+        val_list.append(mat[:, train_val_split_idx:val_test_split_idx])
+        test_list.append(mat[:, val_test_split_idx:])
+    
+    return train_list, val_list, test_list
 
 
 def get_pre_trained_dbn(config: Config, n_samples: int = 10000, print_each=5):
@@ -119,18 +148,30 @@ def epoch(dbn: DBN, kelm: KELM, dataloader: DataLoader, loss_fn: tm.Metric, devi
     return loss / n_samples
 
 
-def mse_for_config(config: Config, dbn: DBN, mat_c: torch.FloatTensor, dbn_training_epochs: int = 0, dbn_eval_each: int = 10):
+def get_datasets(mat_list, config: Config):
+    split = split_train_val_test(mat_list, *config.data_split)
+    return [SlidingWindowDataset(part, config.time_window_length) for part in split]
+
+
+def split_mat(mat, config: Config):
+    mat_list_wd, mat_list_we = split_weekdays_and_weekends(mat, config.train_period[0])
+    return get_datasets(mat_list_wd, config), get_datasets(mat_list_we, config)
+
+
+def crop_and_split_mat(mat, config: Config):
+    mat = crop_q_between(mat, config.read_period, config.train_period)
+    dataset_lists = split_mat(mat, config)
+    print(dataset_lists)
+    return [[DataLoader(dataset) for dataset in dataset_list] for dataset_list in dataset_lists]
+
+
+def train_with_config(config: Config, dbn: DBN, datasets: List[Dataset], dbn_training_epochs: int = 0, dbn_eval_each: int = 10, stride=1):
     mse = tm.MeanSquaredError().to(config.device)
 
-    train_c, val_c, test_c = split_train_val_test(
-        mat_c, *config.data_split)
-    train_dataset = SlidingWindowDataset(
-        train_c.T, config.time_window_length, 1)
-    val_dataset = SlidingWindowDataset(
-        val_c.T, config.time_window_length, 1)
-    test_dataset = SlidingWindowDataset(
-        test_c.T, config.time_window_length, 1)
+    train_dataset, val_dataset, test_dataset = datasets
+
     kelm = fit_kelm_to_dbn(dbn, train_dataset)
+    # kelm = None
 
     if dbn_training_epochs > 0:
         train_dataloader = DataLoader(train_dataset)
@@ -141,7 +182,7 @@ def mse_for_config(config: Config, dbn: DBN, mat_c: torch.FloatTensor, dbn_train
         best_state_dict = dbn.state_dict()
 
         dbn.train(True)
-        for dbn_epoch in range(dbn_training_epochs):
+        for dbn_epoch in tqdm(range(dbn_training_epochs)):
             optim.zero_grad()
             train_loss: torch.FloatTensor = epoch(
                 dbn, kelm, train_dataloader, mse, config.device)
@@ -159,6 +200,7 @@ def mse_for_config(config: Config, dbn: DBN, mat_c: torch.FloatTensor, dbn_train
 
         dbn.load_state_dict(best_state_dict)
 
-    test_dataloader = DataLoader(test_dataset)
+    return dbn, kelm
+    return DataLoader(test_dataset), dbn, kelm
 
     return epoch(dbn, kelm, test_dataloader, mse, config.device).item()

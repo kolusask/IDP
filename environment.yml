@@ -13,5 +13,6 @@ dependencies:
   - pytables
   - scikit-learn
   - torchmetrics
+  - tqdm
   - pip:
     - torch
