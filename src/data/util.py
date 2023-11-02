@@ -27,19 +27,30 @@ def crop_q_between(mat_q, old_period: Period, new_period: Period):
     return mat_q[beg_offset:len(mat_q) if end_offset == 0 else -end_offset]
 
 
-def extract_week_day(mat, start_date: datetime, weekday: int):
+def iter_week_days(mat, start_date: datetime):
     assert len(mat) % POINTS_PER_DAY == 0
-    return mat[
-        (torch.arange(len(mat) // POINTS_PER_DAY) + start_date.weekday())
-        .repeat_interleave(POINTS_PER_DAY) % 7 == weekday
-    ]
+    days = len(mat) // POINTS_PER_DAY
+    for d in range(days):
+        yield (start_date.weekday() + d) % 7, mat[d * POINTS_PER_DAY:(d + 1) * POINTS_PER_DAY]
+    yield (start_date.weekday() + d + 1) % 7, None
 
 
 def split_weekdays_and_weekends(mat, start_date: datetime):
-    weekdays = torch.row_stack([extract_week_day(mat, start_date, d)
-                           for d in range(5)]).flatten(0, 0)
-    weekends = torch.row_stack([extract_week_day(mat, start_date, d)
-                           for d in range(5, 7)]).flatten(0, 0)
+    weekdays = []
+    weekends = []
+
+    current_period = []
+
+    for d, m in iter_week_days(mat, start_date):
+        if current_period:
+            if d == 0:
+                weekends.append(torch.column_stack(current_period))
+                current_period.clear()
+            elif d == 5:
+                weekdays.append(torch.column_stack(current_period))
+                current_period.clear()
+        if m is not None:
+            current_period.append(m.T)
 
     return weekdays, weekends
 
