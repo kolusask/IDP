@@ -32,9 +32,11 @@ class KELM:
 
     def _kernel(self, x1: torch.TensorType, x2: torch.TensorType) \
             -> torch.TensorType:
+        x1_cpu = x1.to(torch.device('cpu'))
+        x2_cpu = x2.to(torch.device('cpu'))
         return torch.exp(
-            -self.gamma * torch.norm(x1[:, None] - x2[None, :], dim=2) ** 2
-        )
+            -self.gamma * torch.norm(x1_cpu[:, None] - x2_cpu[None, :], dim=2) ** 2
+        ).to(x1.device)
 
 
 # class DatasetKELM(KELM):
