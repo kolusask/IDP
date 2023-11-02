@@ -107,8 +107,9 @@ def fix_conflicting_headers(int_path: str, headers: Dict[int, List[str]]):
             else:
                 df[col_name] = 0
         assert common_count == len(header)
-        df.columns = _reindex_header(df.columns)
-        df.to_csv(day_path, sep=';')
+        if common_count != len(correct_header):
+            df.columns = _reindex_header(df.columns)
+            df.set_index('DATUM').to_csv(day_path, sep=';')
 
 def process_intersection(int: str):
     in_int_path, out_int_path = prepare_int_paths(int)
@@ -119,7 +120,7 @@ def process_intersection(int: str):
     fix_conflicting_headers(out_int_path, headers)
 
     d20211031 = path.join(out_int_path, 'DetCount_20211031.csv')
-    read_csv(d20211031, sep=';').drop(index=list(range(8, 12))).to_csv(d20211031, sep=';')
+    read_csv(d20211031, sep=';').drop(index=list(range(8, 12))).set_index('DATUM').to_csv(d20211031, sep=';')
 
 
 int_3050_20211017_path = path.join(in_dir_path, '3050', int_subdir_name, 'DetCount_20211017.csv')
