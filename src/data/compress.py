@@ -54,7 +54,7 @@ def get_compression_matrix(mat_q, groups):
     mat_c = mat_q[:, representatives]
     assert mat_c.shape == (mat_q.shape[0], len(groups))
 
-    return mat_c
+    return mat_c, representatives
 
 
 def get_compressed_matrix(mat_c, mat_q):
