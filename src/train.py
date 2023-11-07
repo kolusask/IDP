@@ -116,7 +116,14 @@ def get_pre_trained_dbn(config: Config, n_samples: int = 10000, print_each=5):
     return dbn
 
 
-def fit_kelm_to_dbn(dbn: DBN, dataset: SlidingWindowDataset):
+def errors_for_kelm_parameters(X, y, gamma, reg_coeff):
+    kelm = KELM()
+    kelm.fit(X, y, gamma=gamma, reg_coeff=reg_coeff)
+
+    return torch.abs(kelm(X) - y)
+
+
+def fit_kelm_to_dbn(dbn: DBN, dataset: SlidingWindowDataset, gamma=1, reg_coeff=1.0):
     e2p_dataset = EncodingToPredictionDataset(dataset, dbn)
 
     kelm_X = []
@@ -130,7 +137,7 @@ def fit_kelm_to_dbn(dbn: DBN, dataset: SlidingWindowDataset):
     kelm_y = torch.concatenate(kelm_y)[:, None]
 
     kelm = KELM()
-    kelm.fit(kelm_X, kelm_y)
+    kelm.fit(kelm_X, kelm_y, gamma=gamma, reg_coeff=reg_coeff)
 
     return kelm
 
@@ -161,16 +168,15 @@ def split_mat(mat, config: Config):
 def crop_and_split_mat(mat, config: Config):
     mat = crop_q_between(mat, config.read_period, config.train_period)
     dataset_lists = split_mat(mat, config)
-    print(dataset_lists)
     return [[DataLoader(dataset) for dataset in dataset_list] for dataset_list in dataset_lists]
 
 
-def train_with_config(config: Config, dbn: DBN, datasets: List[Dataset], dbn_training_epochs: int = 0, dbn_eval_each: int = 10, stride=1):
+def train_with_config(config: Config, dbn: DBN, datasets: List[Dataset], dbn_training_epochs: int = 0, dbn_eval_each: int = 10, stride=1, gamma=1, reg_coeff=1):
     mse = tm.MeanSquaredError().to(config.device)
 
     train_dataset, val_dataset, test_dataset = datasets
 
-    kelm = fit_kelm_to_dbn(dbn, train_dataset)
+    kelm = fit_kelm_to_dbn(dbn, train_dataset, gamma=gamma, reg_coeff=reg_coeff)
     # kelm = None
 
     if dbn_training_epochs > 0:
@@ -189,18 +195,17 @@ def train_with_config(config: Config, dbn: DBN, datasets: List[Dataset], dbn_tra
             train_loss.backward()
 
             optim.step()
-            kelm = fit_kelm_to_dbn(dbn, train_dataset)
+            kelm = fit_kelm_to_dbn(dbn, train_dataset, gamma=gamma)
 
             if dbn_epoch % dbn_eval_each == 0:
+                dbn.train(False)
                 val_loss = epoch(dbn, kelm, val_dataloader, mse, config.device)
                 if val_loss < best_loss:
                     best_loss = val_loss
                     best_state_dict = dbn.state_dict()
+                dbn.train(True)
         dbn.train(False)
 
         dbn.load_state_dict(best_state_dict)
 
-    return dbn, kelm
-    return DataLoader(test_dataset), dbn, kelm
-
-    return epoch(dbn, kelm, test_dataloader, mse, config.device).item()
+    return dbn, kelm, val_dataloader
