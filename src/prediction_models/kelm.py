@@ -8,14 +8,17 @@ class KELM:
     def fit(self,
             X: torch.TensorType,
             y: torch.TensorType,
-            reg_coeff: float = 1.0, gamma: float = 1.0):
+            reg_coeff: float = 0.0, gamma: float = 1.0):
         M, N = X.shape
         M, C = y.shape
         assert M == len(X)
         self.gamma = gamma
         omega = self._kernel(X, X)
-        # self._beta = torch.inverse(torch.eye(M, device=X.device) / reg_coeff + omega) @ y
-        self._beta = torch.pinverse(omega) @ y
+        if reg_coeff == 0:
+            self._beta = torch.pinverse(omega) @ y
+        else:
+            self._beta = torch.pinverse(torch.eye(M, device=X.device) / reg_coeff + omega) @ y
+        self.reg_coeff = reg_coeff
         self._data = X
 
     def random_fit(self, device, M: int, N: int, C: int, reg_coeff: float = 1.0, gamma: float = 1.0):
@@ -27,49 +30,15 @@ class KELM:
         return self.predict(X)
 
     def predict(self, X: torch.TensorType) -> torch.TensorType:
-        assert self._beta is not None, "The model is not fitted"
-        return self._kernel(X, self._data) @ self._beta
+        assert self._beta is not None, "KELM model is not fitted"
+        M, N = X.shape
+        k = self._kernel(X, self._data)
+        # if self.reg_coeff > 0:
+        #     k += torch.eye(M, device=X.device) / self.reg_coeff
+        return k @ self._beta
 
     def _kernel(self, x1: torch.TensorType, x2: torch.TensorType) \
             -> torch.TensorType:
-        x1_cpu = x1.to(torch.device('cpu'))
-        x2_cpu = x2.to(torch.device('cpu'))
         return torch.exp(
-            -self.gamma * torch.norm(x1_cpu[:, None] - x2_cpu[None, :], dim=2) ** 2
+            -self.gamma * torch.norm(x1.cpu()[:, None] - x2.cpu()[None, :], dim=2) ** 2
         ).to(x1.device)
-
-
-# class DatasetKELM(KELM):
-#     def fit(self, dataset: torch.utils.data.Dataset, encoder: torch.nn.Module,
-#             reg_coeff: float = 1.0, gamma: float = 1.0):
-#         self.dataset = dataset
-#         self.encoder = encoder
-#         self.reg_coeff = reg_coeff
-#         self.gamma = gamma
-#         data_X = []
-#         data_y = []
-#         for i in range(len(dataset)):
-#             X, y = dataset[i]
-#             data_X.append(X)
-#             data_y.append(y)
-#         data_X = torch.stack(data_X)
-#         data_y = torch.stack(data_y)
-#         self.beta = []
-#         for X, y in zip(data_X, data_y):
-#             omega = self._kernel(X[None], data_X).squeeze()
-#             self.beta.append((omega @ data_y).item())
-#         self.beta = torch.tensor(self.beta)
-#         pass
-
-#     def predict(self, X: torch.FloatTensor) -> torch.FloatTensor:
-
-        
-#     def _kernel(self, X):
-#         row = []
-#         for i in range(len(self.dataset)):
-#             data_X, y = self.dataset[i]
-#             omega = super()._kernel(X[None], data_X).squeeze()
-#             row.append((omega @ y).item())
-
-#         return torch.tensor(row)
-
