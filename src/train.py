@@ -87,6 +87,19 @@ class EncodingToPredictionDataset(Dataset):
         else:
             return self.cache[index]
 
+class OnlyXDataset(Dataset):
+    def __init__(self, samples_per_x: int, source_dataset: Dataset):
+        super().__init__()
+        self.source_dataset = source_dataset
+        self.samples_per_x = samples_per_x
+    
+    def __len__(self):
+        return len(self.source_dataset) * self.samples_per_x
+    
+    def __getitem__(self, index: int):
+        X, y = self.source_dataset[index // self.samples_per_x]
+        return X[index % self.samples_per_x]
+
 
 def split_train_val_test(mat_list: List[torch.FloatTensor], train_portion: float, val_portion: float):
     mat_len = mat_list[0].shape[1]
@@ -105,9 +118,11 @@ def split_train_val_test(mat_list: List[torch.FloatTensor], train_portion: float
     return train_list, val_list, test_list
 
 
-def get_pre_trained_dbn(config: Config, n_samples: int = 10000, print_each=5):
-    dbn_pre_train_loader = DataLoader(RandomBinaryVectorDataset(
-        n_samples, config.time_window_length), batch_size=256)
+def get_pre_trained_dbn(config: Config, dataset: Dataset, print_each=5):
+    rbvd = RandomBinaryVectorDataset(100, config.time_window_length)
+    dbn_pre_train_loader = DataLoader(rbvd, batch_size=256)
+    dataset = OnlyXDataset(len(dataset[0]), dataset)
+    dbn_pre_train_loader = DataLoader(dataset, batch_size=256)
     dbn = DBN(config.time_window_length, config.dbn_hidden_layer_sizes,
               config.gibbs_sampling_steps).to(config.device)
     pre_train_dbn(dbn, dbn_pre_train_loader,
@@ -171,10 +186,12 @@ def crop_and_split_mat(mat, config: Config):
     return [[DataLoader(dataset) for dataset in dataset_list] for dataset_list in dataset_lists]
 
 
-def train_with_config(config: Config, dbn: DBN, datasets: List[Dataset], dbn_training_epochs: int = 0, dbn_eval_each: int = 10, stride=1, gamma=1, reg_coeff=1):
+def train_with_config(config: Config, datasets: List[Dataset], dbn_training_epochs: int = 0, dbn_eval_each: int = 10, stride=1, gamma=1, reg_coeff=1):
     mse = tm.MeanSquaredError().to(config.device)
 
     train_dataset, val_dataset, test_dataset = datasets
+
+    dbn = get_pre_trained_dbn(config, train_dataset)
 
     kelm = fit_kelm_to_dbn(dbn, train_dataset, gamma=gamma, reg_coeff=reg_coeff)
     # kelm = None
