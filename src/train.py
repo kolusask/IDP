@@ -88,10 +88,10 @@ class EncodingToPredictionDataset(Dataset):
             return self.cache[index]
 
 class OnlyXDataset(Dataset):
-    def __init__(self, samples_per_x: int, source_dataset: Dataset):
+    def __init__(self, source_dataset: Dataset):
         super().__init__()
         self.source_dataset = source_dataset
-        self.samples_per_x = samples_per_x
+        self.samples_per_x = len(source_dataset[0][0])
     
     def __len__(self):
         return len(self.source_dataset) * self.samples_per_x
@@ -119,9 +119,9 @@ def split_train_val_test(mat_list: List[torch.FloatTensor], train_portion: float
 
 
 def get_pre_trained_dbn(config: Config, dataset: Dataset, print_each=5):
-    rbvd = RandomBinaryVectorDataset(100, config.time_window_length)
-    dbn_pre_train_loader = DataLoader(rbvd, batch_size=256)
-    dataset = OnlyXDataset(len(dataset[0]), dataset)
+    oxd = OnlyXDataset(dataset)
+    dbn_pre_train_loader = DataLoader(oxd, batch_size=256)
+    dataset = OnlyXDataset(dataset)
     dbn_pre_train_loader = DataLoader(dataset, batch_size=256)
     dbn = DBN(config.time_window_length, config.dbn_hidden_layer_sizes,
               config.gibbs_sampling_steps).to(config.device)
@@ -162,7 +162,7 @@ def epoch(dbn: DBN, kelm: KELM, dataloader: DataLoader, loss_fn: tm.Metric, devi
     loss = torch.tensor([0.,]).to(device)
     for X, y in dataloader:
         n_samples += 1
-        pred = dbn(X).squeeze()
+        pred = dbn(X).squeeze(0)
         pred = kelm(pred).T
 
         loss += loss_fn(pred, y)
