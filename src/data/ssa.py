@@ -155,9 +155,9 @@ class SSA:
         for i, g in enumerate(self.I):
             pi_g = pi[:, None, g]
             nu_2 = torch.bmm(pi_g.view(B, 1, len(g)), pi_g.view(B, len(g), 1))
-            R = (1 / (1 - nu_2) * (torch.bmm(pi_g, P[:, g]))).squeeze()
+            R = (1 / (1 - nu_2) * (torch.bmm(pi_g, P[:, g]))).squeeze(1)
             for m in range(len(x), len(x) + M):
-                y[~empty_input, i, m] = torch.bmm(R[:, None], y[:, i, m - R.shape[1]:m][:, :, None]).squeeze()[~empty_input]
+                y[~empty_input, i, m] = torch.bmm(R[:, None], y[:, i, m - R.shape[1]:m][:, :, None]).squeeze([1, 2])[~empty_input]
         
         return y.permute(1, 2, 0)
 

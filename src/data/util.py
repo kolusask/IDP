@@ -2,7 +2,7 @@ from globals import *
 
 import torch
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Tuple
 
 
@@ -36,21 +36,31 @@ def iter_week_days(mat, start_date: datetime):
 
 
 def split_weekdays_and_weekends(mat, start_date: datetime):
+    wd_data = []
+    we_data = []
     weekdays = []
     weekends = []
 
+    if start_date.weekday() % 7 < 5:
+        weekdays.append(start_date)
+    else:
+        weekends.append(start_date)
+
     current_period = []
 
-    for d, m in iter_week_days(mat, start_date):
+    for i, (d, m) in enumerate(iter_week_days(mat, start_date)):
         if current_period:
             if d == 0:
-                weekends.append(torch.column_stack(current_period))
+                if m is not None:
+                    weekdays.append(start_date + timedelta(days=i))
+                we_data.append(torch.column_stack(current_period))
                 current_period.clear()
             elif d == 5:
-                weekdays.append(torch.column_stack(current_period))
+                if m is not None:
+                    weekends.append(start_date + timedelta(days=i))
+                wd_data.append(torch.column_stack(current_period))
                 current_period.clear()
         if m is not None:
             current_period.append(m.T)
 
-    return weekdays, weekends
-
+    return (wd_data, weekdays), (we_data, weekends)

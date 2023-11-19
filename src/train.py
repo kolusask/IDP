@@ -2,6 +2,7 @@ import torchmetrics as tm
 
 from tqdm import tqdm
 
+from datetime import timedelta
 from itertools import accumulate
 from typing import List, Tuple
 
@@ -45,12 +46,11 @@ class RandomBinaryVectorDataset(Dataset):
 
 
 class SlidingWindowDataset(Dataset):
-    def __init__(self, mat_list: List[torch.FloatTensor], sliding_window_length: int, stride: int = 1):
+    def __init__(self, mat_list: List[torch.FloatTensor], sliding_window_length: int):
         assert len(mat_list) > 0
         self.mat_list = mat_list
         self.sliding_window_length = sliding_window_length
-        self.stride = stride
-        mat_lengths = [(mat.shape[1] - self.sliding_window_length) // self.stride for mat in mat_list]
+        mat_lengths = [(mat.shape[1] - self.sliding_window_length) for mat in mat_list]
         self.mat_len_acc = [0,] + [int(i) for i in accumulate(mat_lengths)]
 
     def __len__(self) -> int:
@@ -101,24 +101,24 @@ class OnlyXDataset(Dataset):
         return X[index % self.samples_per_x]
 
 
-def split_train_val_test(mat_list: List[torch.FloatTensor], train_portion: float, val_portion: float):
-    mat_len = mat_list[0].shape[1]
+def split_train_val_test(mat_list: List[torch.FloatTensor], train_portion: float, val_portion: float, overlap: int = 0):
+    mat_len = mat_list[0].shape[1] - overlap
     train_val_split_idx = int(mat_len * train_portion)
     val_test_split_idx = train_val_split_idx + int(mat_len * val_portion)
 
-    train_list = []
+    train_list = [] 
     val_list = []
     test_list = []
 
     for mat in mat_list:
-        train_list.append(mat[:, :train_val_split_idx])
-        val_list.append(mat[:, train_val_split_idx:val_test_split_idx])
+        train_list.append(mat[:, :train_val_split_idx + overlap])
+        val_list.append(mat[:, train_val_split_idx:val_test_split_idx + overlap])
         test_list.append(mat[:, val_test_split_idx:])
     
     return train_list, val_list, test_list
 
 
-def get_pre_trained_dbn(config: Config, dataset: Dataset, print_each=5):
+def get_pre_trained_dbn(config: Config, dataset: Dataset, print_each=5, n_epochs=20):
     oxd = OnlyXDataset(dataset)
     dbn_pre_train_loader = DataLoader(oxd, batch_size=256)
     dataset = OnlyXDataset(dataset)
@@ -126,7 +126,7 @@ def get_pre_trained_dbn(config: Config, dataset: Dataset, print_each=5):
     dbn = DBN(config.time_window_length, config.dbn_hidden_layer_sizes,
               config.gibbs_sampling_steps).to(config.device)
     pre_train_dbn(dbn, dbn_pre_train_loader,
-                  config.device, print_each=print_each)
+                  config.device, print_each=print_each, n_epochs=n_epochs)
 
     return dbn
 
@@ -151,7 +151,7 @@ def fit_kelm_to_dbn(dbn: DBN, dataset: SlidingWindowDataset, gamma=1, reg_coeff=
     kelm_X = torch.concatenate(kelm_X)
     kelm_y = torch.concatenate(kelm_y)[:, None]
 
-    kelm = KELM()
+    kelm = KELM(kelm_y.shape, kelm_X.shape)
     kelm.fit(kelm_X, kelm_y, gamma=gamma, reg_coeff=reg_coeff)
 
     return kelm
@@ -170,19 +170,38 @@ def epoch(dbn: DBN, kelm: KELM, dataloader: DataLoader, loss_fn: tm.Metric, devi
     return loss / n_samples
 
 
-def get_datasets(mat_list, config: Config):
-    split = split_train_val_test(mat_list, *config.data_split)
-    return [SlidingWindowDataset(part, config.time_window_length) for part in split]
+def get_datasets(mat_list, data_split, time_window_length, overlap: int = 0):
+    split = split_train_val_test(mat_list, *data_split, overlap=overlap)
+    return [SlidingWindowDataset(part, time_window_length + overlap) for part in split]
 
 
 def split_mat(mat, config: Config):
-    mat_list_wd, mat_list_we = split_weekdays_and_weekends(mat, config.train_period[0])
-    return get_datasets(mat_list_wd, config), get_datasets(mat_list_we, config)
+    (mat_list_wd, _), (mat_list_we, _) = split_weekdays_and_weekends(mat, config.train_period[0])
+    return (
+        get_datasets(mat_list_wd, config.data_split, config.time_window_length),
+        get_datasets(mat_list_we, config.data_split, config.time_window_length)
+    )
 
 
-def crop_and_split_mat(mat, config: Config):
-    mat = crop_q_between(mat, config.read_period, config.train_period)
-    dataset_lists = split_mat(mat, config)
+def crop_and_split_mat(mat, config: Config, separate_weekends=True):
+    cropped_mat = crop_q_between(mat, config.read_period, config.train_period)
+    (mat_list_wd, weekdays), (mat_list_we, weekends) = split_weekdays_and_weekends(cropped_mat, config.train_period[0])
+    if not separate_weekends:
+        pre_train_period = (config.read_period[0], config.train_period[0])
+        pre_window_length = count_points_in_period(pre_train_period)
+        def _prepend_mat(part_mat, orig_date):
+            day_shift = (orig_date - config.train_period[0]).days
+            period_to_prepend = (config.read_period[0] + timedelta(days=day_shift), orig_date)
+            mat_to_prepend = crop_q_between(mat, config.read_period, period_to_prepend).T
+            return torch.column_stack([mat_to_prepend, part_mat]).T
+        mat_list_wd = [_prepend_mat(part, date).T for part, date in zip(mat_list_wd, weekdays)]
+        mat_list_we = [_prepend_mat(part, date).T for part, date in zip(mat_list_we, weekends)]
+    else:
+        pre_window_length = 0
+    dataset_lists = (
+        get_datasets(mat_list_wd, config.data_split, config.time_window_length, overlap=pre_window_length),
+        get_datasets(mat_list_we, config.data_split, config.time_window_length, overlap=pre_window_length)
+    )
     return [[DataLoader(dataset) for dataset in dataset_list] for dataset_list in dataset_lists]
 
 
@@ -191,7 +210,7 @@ def train_with_config(config: Config, datasets: List[Dataset], dbn_training_epoc
 
     train_dataset, val_dataset, test_dataset = datasets
 
-    dbn = get_pre_trained_dbn(config, train_dataset)
+    dbn = get_pre_trained_dbn(config, train_dataset, print_each=0, n_epochs=100)
 
     kelm = fit_kelm_to_dbn(dbn, train_dataset, gamma=gamma, reg_coeff=reg_coeff)
     # kelm = None

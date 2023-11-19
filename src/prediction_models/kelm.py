@@ -1,9 +1,13 @@
 import torch
 
 
-class KELM:
-    def __init__(self):
-        self._beta = None
+class KELM(torch.nn.Module):
+    def __init__(self, beta_shape, data_shape):
+        super(KELM, self).__init__()
+        self._beta = torch.nn.Parameter(torch.empty(beta_shape))
+        self._data = torch.nn.Parameter(torch.empty(data_shape))
+        # self._beta = torch.nn.Parameter()
+        # self._data = torch.nn.Parameter()
 
     def fit(self,
             X: torch.TensorType,
@@ -15,11 +19,11 @@ class KELM:
         self.gamma = gamma
         omega = self._kernel(X, X)
         if reg_coeff == 0:
-            self._beta = torch.pinverse(omega) @ y
+            self._beta = torch.nn.Parameter(torch.pinverse(omega) @ y)
         else:
-            self._beta = torch.pinverse(torch.eye(M, device=X.device) / reg_coeff + omega) @ y
+            self._beta = torch.nn.Parameter(torch.pinverse(torch.eye(M, device=X.device) / reg_coeff + omega) @ y)
         self.reg_coeff = reg_coeff
-        self._data = X
+        self._data = torch.nn.Parameter(X)
 
     def random_fit(self, device, M: int, N: int, C: int, reg_coeff: float = 1.0, gamma: float = 1.0):
         X = torch.rand(M, N, dtype=torch.float32, device=device)
