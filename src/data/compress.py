@@ -9,14 +9,6 @@ def build_correlation_matrix(mat_q, remove_empty=False):
     return torch.corrcoef(mat_q.T[usable]).nan_to_num(0), usable
 
 
-    if remove_empty:
-        nonempty = mat.diag() > 0
-        mat = mat[nonempty, :][:, nonempty]
-        nonempty = torch.where(nonempty)[0]
-        return mat, nonempty
-    else:
-        return mat
-
 def split_sections_into_groups(mat_r, alpha):
     mat_r = torch.abs(mat_r)
     ungrouped = torch.ones(len(mat_r), dtype=bool, device=mat_r.device)
