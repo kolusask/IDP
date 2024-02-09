@@ -104,7 +104,7 @@ class OnlyXDataset(Dataset):
 def split_train_val_test(mat_list: List[torch.FloatTensor], train_portion: float, val_portion: float, overlap: int = 0):
     mat_len = mat_list[0].shape[1] - overlap
     train_val_split_idx = int(mat_len * train_portion)
-    val_test_split_idx = train_val_split_idx + int(mat_len * val_portion)
+    val_test_split_idx = int(mat_len * (train_portion + val_portion))
 
     train_list = [] 
     val_list = []
