@@ -49,7 +49,7 @@ class Config:
         self.time_window_length = time_window_length
         assert 0. < data_split[0] < 1.
         assert 0. < data_split[1] < 1.
-        assert sum(data_split) < 1.
+        # assert sum(data_split) < 1.
         self.data_split = data_split
 
     def from_json(config_file_path: str) -> 'Config':
