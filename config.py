@@ -21,6 +21,7 @@ class Config:
     def __init__(self, name: str,
                  read_period: Period,
                  train_period: Period,
+                 test_period: Period,
                  spectral_threshold: int,
                  alpha: int,
                  dbn_hidden_layer_sizes: List[int] | int,
@@ -40,6 +41,7 @@ class Config:
         assert read_period[0] <= train_period[0] < train_period[1] <= read_period[1]
         self.read_period = read_period
         self.train_period = train_period
+        self.test_period = test_period
         self.spectral_threshold = spectral_threshold
         self.alpha = alpha
         if type(dbn_hidden_layer_sizes) is int:
@@ -65,6 +67,10 @@ class Config:
             (
                 Config._parse_date(json['TRAIN_START_DATE']),
                 Config._parse_date(json['TRAIN_END_DATE']),
+            ),
+            (
+                Config._parse_date(json['TEST_START_DATE']),
+                Config._parse_date(json['TEST_END_DATE']),
             ),
             json['SPECTRAL_THRESHOLD'],
             json['ALPHA'],
