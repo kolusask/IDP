@@ -1021,7 +1021,7 @@ procedure looks like this:
 	\item Use the combined DBN+KELM model again to make predictions.
 	\item Calculate the loss using MSE (Equation~\ref{eq:mse}), propagate it
 	through the unified model and update DBN.
-	\item Repeat all the steps from 2 for the chosen number of training epochs.
+	\item Repeat all the steps from 2 for 100 training epochs.
 \end{enumerate}
 This way, we iterate between updating weights of DBN using an "old" KELM and
 fitting a "new" KELM for working with an updated DBN.
@@ -1043,10 +1043,12 @@ would consider only one type of days. We split the complete input matrix
 $\mathbf{Q}$ using a utility function that counts samples per day and uses the
 \texttt{datetime} library to separate the dates. Our final data class derived
 from \texttt{torch.utils.data.Dataset} uses a sliding window returning it's
-contents as an input and the next sample after it as the expected output. During
-this sliding process, it also makes sure to not divide the window between
+contents as an input and the next sample after it as the expected output. We
+During this sliding process, it also makes sure to not divide the window between
 consecutive regions (e.g., start on Sunday and end on Saturday of the next
-week).
+week). Our infrastructure also divides these data into a 80\% to 20\% proportion
+to evaluate the model right after training and select the best set of hyper
+parameters.
 
 \subsection{Prediction methods}
 
@@ -1134,13 +1136,13 @@ our data specifically is given in Figure~\ref{fig:alpha-groups}.
 	\centering
 	\begin{minipage}{0.45\textwidth}
 		\centering
-		\includegraphics[width=\textwidth,height=\textheight,keepaspectratio]{img/alpha_groups_0.5_0.95.png}
-		\subcaption{$\alpha\in[0.05,0.95]$}
+		\includegraphics[width=\textwidth,height=\textheight,keepaspectratio]{img/alpha_groups_0.0_0.95.png}
+		\subcaption{$\alpha\in[0.00,0.95]$}
 	\end{minipage}
 	\begin{minipage}{0.45\textwidth}
 		\centering
 		\includegraphics[width=\textwidth,height=\textheight,keepaspectratio]{img/alpha_groups_9.0_9.9.png}
-		\subcaption{$\alpha\in[0.9,0.99]$}
+		\subcaption{$\alpha\in[0.90,0.99]$}
 	\end{minipage}
 	\begin{minipage}{\textwidth}
 		\centering
@@ -1166,12 +1168,9 @@ our data specifically is given in Figure~\ref{fig:alpha-groups}.
 
 \section{Outline}
 
-For training and evaluation of the methods, we select four whole consecutive
-weeks from \textit{May 31 to June 27, 2021} for the final prediction. Since the
-prediction process is split into two independent parts as described in
-Section~\ref{sec:extraction-of-components}, our plan is to choose three  sets of
-best hyper parameters: minimizing the loss for trend, for the residuals
-and for the combined predicted signal.
+Our first step in the evaluation is to select a set of hyper parameters to
+minimize the total MSE loss. For that purpose, we select four whole consecutive
+weeks from \textit{May 31 to June 27, 2021}.
 
 The input window for each call to the model was 1 hour long in the original
 paper. For 5-minute sampling intervals, that amounts to 12 samples. However,
@@ -1209,11 +1208,20 @@ only when utilizing the compression. Therefore, we adjust the parameters in two
 stages, using MSE loss to adjust $P$ and $N$ and MAPE for optimizing over
 $\alpha$ (Equations \ref{eq:mse} and \ref{eq:mape} respectively).
 
-After that, we apply the procedure to all sections and report our results using
-the same losses.
+After that, we apply the procedure to all sections on the next week - from
+\textit{June 28} until \textit{July 4} - and report our results using the same
+losses.
+
+With respect to the compression procedure, we first test the method's ability to
+preserve the original data in a compressed form without prediciton. For that, we
+observe the behaviour of the MSE on one of the sections for varying values of
+$\alpha$. After that, we perform the same experiments with predicted
+values and compare both MSE and MAPE on a section that was not selected as a
+representative of it's group and whose trend was thus not predicted by the model
+directly.
 
 
-\section{Method and parameters adjustment}
+\section{Results}
 
 Test runs of our method have proven infeasible to train one shared DBN-KELM on
 all sections data. Even if the model architecture is flexible enough to capture
@@ -1221,24 +1229,211 @@ all intricacies in predicting the residuals, the memory requirements in that
 case could not be satisfied. This is due to the fact that fitting a KELM model
 requires storing the original data as a class member for further inference (see
 Equation~\ref{eq:kelm-inference}). For 3-hour sliding windows shifted by 15
-minutes each, this means $(24-3)*15=315$ input sequences per section per day.
-Storing them in an optimized form is not possible either since they are needed
-in calculation of $\beta$ which is also stored. After unsuccessful attempts to
-run this configuration in various advanced machines, including the one with a
-\textit{T4} GPU with \textit{16 GB GPU RAM} available in \textit{Google Colab},
-we have resorted to training a separate model for each section. An alternative
-would be to train a model on a limited amount of data and still generalize it to
-all sections at once. This could be done by either training it on only one
-section, on just a handful of samples from multiple sections. Both approaches,
-however, are reasonable only under an assumption that the traffic flow is indeed
-uniform across all of them and the per-section prediction accuracy of our model
-is very high.
+minutes each, this means $(24-3)\cdot15=315$ input sequences per section per
+day. Storing them in an optimized form is not possible either since they are
+needed in calculation of $\beta$ which is also stored. After unsuccessful
+attempts to run this configuration in various advanced machines, including the
+one with a \textit{T4} GPU with \textit{16 GB GPU RAM} available in
+\textit{Google Colab}, we have resorted to training a separate model for each
+section. An alternative would be to train a model on a limited amount of data
+and still generalize it to all sections at once. This could be done by either
+training it on only one section, on just a handful of samples from multiple
+sections. Both approaches, however, are reasonable only under an assumption that
+the traffic flow is indeed uniform across all of them and the per-section
+prediction accuracy of our model is very high.
 
 For the initial runs, we apply our method to six sections as a sanity check and
-select one of them with more active traffic flow to optimize the hyper
-parameters.
+select one of them with (\textit{No. 160 in $\mathit{\mathbf{Q}}$}) more active
+traffic flow to optimize the hyper parameters. We ran the experiment through a
+grid search optimization (picking different pairs of values for hyper parameters
+and comparing the losses). The value of $N$ does not seem to significantly
+affect the loss in the range we have tested it on ($N\in[4,84,164,244]$). Hence,
+a further search was deemed unnecessary and we settled with the slightly better
+choice of $N=84$. For P, we made an extensive search in various ranges from as
+low as $P=1$ to as high as $P=40000$. Figure~\ref{fig:p_adjust} shows the
+reaction of the MSE loss on the adjustment in $P$. Increasing the value of $P$
+alters the way values are allocated between the two components, increasing the
+maximum value in the residuals and decreasing it in the trend. The overall
+minimum value is observed with $P=70$. All three losses on the section are,
+however, very high - $5456.6$, $2.95$ and $5496.05$ respectively. Averaged
+across all sections, the losses are $584.65$, $126.20$, $627.24$.
+
+Then, we apply the method with said parameters to in the whole testing week. The
+component separation achieved with the selected threshold is illustrated on
+Figure~\ref{fig:preprocessed}. It is worth mentioning that the mean value
+across all sections expected in the training portion is $4.89$ times higher in
+the trend component than in the residuals. A prediction for one separate section
+is given on Figure~\ref{fig:prediction}.
+
+\begin{figure}
+	\begin{subfigure}{\textwidth}
+		\includegraphics[width=\textwidth,keepaspectratio]{img/p_adjust_log.png}
+		\caption{$P\in[1,40000]$ on a logarithmic scale.}
+	\end{subfigure}
+	\begin{subfigure}{\textwidth}
+		\includegraphics[width=\textwidth,keepaspectratio]{img/p_adjust_200.png}
+		\caption{$P\in[1,200]$ on a linear scale.}
+	\end{subfigure}
+	\centering
+	\caption{Values of MSE on two components and the combined data on the
+	\textit{160th section} compared with a varying value of the spectral
+	threshold $P$.}
+	\label{fig:p_adjust}
+\end{figure}
+
+\begin{figure}
+	\includegraphics[width=\textwidth,keepaspectratio]{img/preprocessed.png}
+	\centering
+	\caption{Spectral analysis of one week in data series and split into two
+	components following the algorithm in
+	Section~\ref{sec:extraction-of-components}. FFT values below the threshold
+	$P=40$ (dashed red line) are present in the residual component, but
+	absent in the trend. The resultant extracted components on the left reflect
+	this separation.}
+	\label{fig:preprocessed}
+\end{figure}
+
+\begin{figure}
+	\begin{subfigure}{\textwidth}
+		\includegraphics[width=\textwidth,keepaspectratio]{img/prediction_wd.png}
+		\caption{Work days.}
+	\end{subfigure}
+	\begin{subfigure}{\textwidth}
+		\includegraphics[width=\textwidth,keepaspectratio]{img/prediction_we.png}
+		\caption{Week ends.}
+	\end{subfigure}
+	\centering
+	\caption{Prediction results for the \textit{160th section} during one week
+	from \textit{June 28} to \textit{July 4, 2021}.}
+	\label{fig:prediction}
+\end{figure}
+
+Finally, we apply the proposed method for compressing network data.
+Figure~\ref{fig:reconstruction_no_prediction} shows both errors on the
+\textit{section 160} versus $\alpha$. It illustrates the
+dependency for $\alpha$ in the whole meaningful range - $\alpha\in[0,1]$.
+Unsurprisingly, both losses are very high when the value is close to $0$, since
+this way we expect a complete reconstruction of the whole matrix $\mathbf{Q}$
+from just a handful of groups. They, as expected, get much lower as $\alpha$
+approaches $1$ and more data are retained within the compressed form. Fusing the
+compression-reconstruction approach with prediction, we lose this clear
+descending trend and instead get a rise in MSE that peaks around $\alpha=81$,
+as shown in Figure~\ref{fig:alpha_prediction}. Following the original paper,
+\ref{fig:alpha_prediction_one} the errors on the sections $161$ which were not
+selected as a group representative, while \ref{fig:alpha_prediction_all}
+aggregates them for the whole network.
+
+\begin{figure}
+	\includegraphics[width=\textwidth,keepaspectratio]{img/alpha_reconstruction_all.png}
+	\centering
+	\caption{Reconstruction of network data from a compressed form without prediction.}
+	\label{fig:reconstruction_no_prediction}
+\end{figure}
+
+\begin{figure}
+	\begin{subfigure}{\textwidth}
+		\includegraphics[width=\textwidth,keepaspectratio]{img/alpha_prediction_one.png}
+		\caption{A non-represented section}
+		\label{fig:alpha_prediction_one}
+	\end{subfigure}
+	\begin{subfigure}{\textwidth}
+		\includegraphics[width=\textwidth,keepaspectratio]{img/alpha_prediction_all.png}
+		\caption{Whole network}
+		\label{fig:alpha_prediction_all}
+	\end{subfigure}
+	\centering
+	\caption{Errors after reconstruction of the whole network from predicted sections with different values of $\alpha$.}
+	\label{fig:alpha_prediction}
+\end{figure}
+
 
 \chapter{Discussion}
 
+The goal of this paper was to apply a deep learning-based technique for
+short-term prediction of traffic flow to data collected from detectors in a road
+network in a city of Ingolstadt in 2021. After researching various approaches
+and comparing them in relevance to our case, we have selected a method by
+\citet{Han.2020} called DBN-KELM used in conjunction with SSA. After studying
+the proposed method and implementing it in PyTorch, we adjusted hyper parameters
+empyrically and tested the procedures on the given data set.
 
-%\todo{If you want to remember a task, place it here.}
+Our findings show that the most significant hyper parameter for the resultant
+loss was the spectral threshold $P$ used for splitting data into components,
+while adjusting the output number of nodes $N$ gives only marginal and
+unpredictable improvements. However, even at the optimal configuration, DBN-KELM
+produces a very high loss on our data series, reaching up to $584.65$ on
+average. SSA, on the other hand, shows surprisingly good results. There are
+still outliers within the sections that raise the overall loss, but averaged at
+$126.20$, it is still $4.63$ times lower than the residual component,
+exacerbated by the fact that an average value in the trend is almost five times
+greater than in the residual. For the compression part of the procedure, we
+observed that the loss of reconstruction went down as the correlation
+coefficient threshold $\alpha$ increased. Reconstructing after the prediction,
+we observed random fluctuation in both MSE and MAPE losses, as well as very high
+unexpected peaks around $\alpha=0.81$.
+
+The very high MSE loss that we have observed is drastically distinct from the
+values reported originally by \citet{Han.2020}. Some ambiguous aspects of the
+method might serve as an explanation for our suboptimal results. The original
+method did not provide details for joint training procedures of both DBN and
+KELM models, leaving us with a gap for free interpretation. It was also unclear
+if a separate model was indeed to be used for each section, although doing it
+otherwise has proved infeasible with out computational resources. This point
+might not be the case for the original authors as they dealt with a much smaller
+data set, thus having to bear less struggle with processing power, as well as
+memory overhead. Finally, the section of the method related to using SSA for
+trend prediction was only mentioned briefly with all specifics left out, forcing
+us, among other things, to use the base version rather than a more refined
+Overlap-SSA.
+
+For the method as a whole, the discrepancy in the observed results can be
+attributed to particulars of the data at hand. The first fact in that regard is
+a certain domain gap between our experiments. While our readings were collected
+from several hundreds of sections closely located in a densely populated city,
+the paper by \citet{Han.2020} dealt with a total of 19 criscrossed highways.
+Apart from aforementioned benefits this provides in term of computational
+resources, it is a known issue for many methods to perform differently in these
+two types of settings. Specifically, the dense area of dislocation introduces
+and amplifies additional variables, namely public events, accidents, business
+operations etc. This makes the behaviour of the flow predictable, requiring more
+powerful models and/or more training data. While all these peculiarities are
+practically random, the overall direction of the data remains mostly unchanged
+on a day-to-day basis. This is pointed to by the fact the SSA forecast that
+relies on the periodicity of the main trend component does perform much better
+than the deep part of the approach that deals with less consistent residuals.
+
+Apart from that, our data lists readings collected over 15 minutes for each
+sample - 3 times less often, than for the original authors. To keep the data
+volume the same, we were forced to increase the width of the input time window.
+It is not unlikely that the given architecture is uncapable of dealing with a
+longer and coarser data that we have.
+
+Last but not least, our set had a number of erroneous areas, demanding a
+rigorous rectifying process. Some of the issues with data required a certain
+extent of speculation about their properties, while others were completely
+intractable and forced us to omit the all together. These missing portions have
+a strong impact on indirect correlation between sections, and might have
+affected the compression procedure. Besides, this undermines our confidence in
+the rest of the data array that we have deemed valid.
+
+Overall, despite mixed results, the model does seem to capture the behaviour of
+the series on the highest level. Specifically, the trend prediction by SSA
+follows a similar pattern as real data, capturing the periodicity of the
+everyday traffic flow and at the very least making this direction of research
+very promising. Our overview of other related works has supports this view, as
+well as proposes possible improvements to this experiment. These improvements
+may include, for example, incorporating additional data parameters (weather,
+social events, accidents etc.) to be considered by the deep learning part. For
+this, the learning-based DBN-KELM architecture has to be extended with modules
+of different architectures. LSTM, for example, is known to capture periodic data
+for long series. Considering the density of sections in a city setting,
+incorporating a CNN for capturing spatial dependencies of the additional
+parameters can be promising as well. In any case, both assertion and extention
+of the described procedure and our implementation of it requires new data with a
+higher sampling frequency and reliability.
+
+To sum up, this project gave us an extensive overview on deep learning methods
+and how they are used for the short-term analysis of traffic flow on road
+networks, as well as a first-hand experience on implementing some of these
+methods and working with data. Despite mixed results, the project has proven
+very educational, and the selected method very promising at least.
