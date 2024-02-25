@@ -183,7 +183,10 @@ def split_mat(mat, config: Config):
     )
 
 
-def crop_and_split_mat(mat, config: Config, separate_weekends=True):
+def crop_and_split_mat(mat, config: Config, test_period=False, separate_weekends=True):
+    if test_period:
+        train_period = config.train_period
+        config.train_period = config.test_period
     cropped_mat = crop_q_between(mat, config.read_period, config.train_period)
     (mat_list_wd, weekdays), (mat_list_we, weekends) = split_weekdays_and_weekends(cropped_mat, config.train_period[0])
     if not separate_weekends:
@@ -202,6 +205,8 @@ def crop_and_split_mat(mat, config: Config, separate_weekends=True):
         get_datasets(mat_list_wd, config.data_split, config.time_window_length, overlap=pre_window_length),
         get_datasets(mat_list_we, config.data_split, config.time_window_length, overlap=pre_window_length)
     )
+    if test_period:
+        config.train_period = train_period
     return [[DataLoader(dataset) for dataset in dataset_list] for dataset_list in dataset_lists]
 
 
@@ -224,7 +229,7 @@ def train_with_config(config: Config, datasets: List[Dataset], dbn_training_epoc
         best_state_dict = dbn.state_dict()
 
         dbn.train(True)
-        for dbn_epoch in tqdm(range(dbn_training_epochs)):
+        for dbn_epoch in range(dbn_training_epochs):
             optim.zero_grad()
             train_loss: torch.FloatTensor = epoch(
                 dbn, kelm, train_dataloader, mse, config.device)

@@ -51,3 +51,6 @@ def get_compression_matrix(mat_q, groups):
 
 def get_compressed_matrix(mat_c, mat_q):
     return torch.linalg.pinv(mat_c) @ mat_q
+
+def decompress(mat_c, mat_x):
+    return mat_c @ mat_x

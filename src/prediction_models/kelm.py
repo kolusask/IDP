@@ -6,6 +6,8 @@ class KELM(torch.nn.Module):
         super(KELM, self).__init__()
         self._beta = torch.nn.Parameter(torch.empty(beta_shape))
         self._data = torch.nn.Parameter(torch.empty(data_shape))
+        self.gamma = 1.0
+        self.reg_coeff = 0.0
         # self._beta = torch.nn.Parameter()
         # self._data = torch.nn.Parameter()
 

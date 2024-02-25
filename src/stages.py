@@ -36,9 +36,8 @@ def preprocess_data(threshold, mat_q):
 
 
 def compress_data(mat_q: torch.Tensor, read_period: Period, train_period: Period, alpha: float):
-    mat_q_cropped = crop_q_between(mat_q, read_period, train_period)
-    mat_r, nonempty = build_correlation_matrix(mat_q_cropped, True)
-    mat_q = mat_q[:, nonempty]
+    mat_q = crop_q_between(mat_q, read_period, train_period)
+    mat_r, nonempty = build_correlation_matrix(mat_q, True)
     groups = split_sections_into_groups(mat_r, alpha)
     mat_c, representatives = get_compression_matrix(mat_q, groups)
     mat_x = get_compressed_matrix(mat_c, mat_q)
