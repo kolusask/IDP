@@ -213,16 +213,16 @@ def crop_and_split_mat(mat, config: Config, test_period=False, separate_weekends
 def train_with_config(config: Config, datasets: List[Dataset], dbn_training_epochs: int = 0, dbn_eval_each: int = 10, stride=1, gamma=1, reg_coeff=1):
     mse = tm.MeanSquaredError().to(config.device)
 
-    train_dataset, val_dataset, test_dataset = datasets
+    train_dataset, val_dataset, _ = datasets
 
     dbn = get_pre_trained_dbn(config, train_dataset, print_each=0, n_epochs=100)
 
     kelm = fit_kelm_to_dbn(dbn, train_dataset, gamma=gamma, reg_coeff=reg_coeff)
-    # kelm = None
+
+    val_dataloader = DataLoader(val_dataset)
 
     if dbn_training_epochs > 0:
         train_dataloader = DataLoader(train_dataset)
-        val_dataloader = DataLoader(val_dataset)
 
         optim = torch.optim.Adam(dbn.parameters())
         best_loss = epoch(dbn, kelm, val_dataloader, mse, config.device)
